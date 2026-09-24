@@ -23,10 +23,15 @@ FNOS 飞牛桌面客户端（**通用 NAS 控制台 + 影视播放**）。基于
 
 ```bash
 npm install               # 安装依赖
+npm run setup:mpv         # 装配 mpv 到 third_party/fntv-mpv（首次运行前必做，见下）
 npm start                 # 构建 Go 代理 + 编译 TS + 启动 Electron（需 Go 工具链）
 npm test                  # tsc 编译 + 运行单测（node --test）
 npm run build:win         # 出 Win x64 NSIS 安装包
 ```
+
+> **关于 mpv**：`third_party/*` 不入库，mpv.exe + DLL 需单独装配，否则点播放会因找不到 `mpv.exe` 而无效。
+> `npm run setup:mpv` 会自动在本机常见位置（如已安装的 fnOS Desktop）查找现成 mpv 并复制；也可
+> `node scripts/setup-mpv.mjs --from "<mpv目录>"` 指定，或 `--url "<mpv.zip>"` 下载。
 
 ## 目录结构
 

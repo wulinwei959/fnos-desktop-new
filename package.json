@@ -6,6 +6,7 @@
     "license": "GPL-3.0",
     "scripts": {
         "build:proxy:win": "cd src/modules/proxy && go build -o ../../../third_party/proxy/proxy.exe",
+        "setup:mpv": "node scripts/setup-mpv.mjs --auto",
         "start": "npm run clean && npm run build:proxy:win && tsc && electron .",
         "compile": "tsc",
         "test": "npm run compile && node --test tests/*.test.cjs",
