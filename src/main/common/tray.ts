@@ -16,7 +16,6 @@ let mainWindow: BrowserWindow | null = null; // 主窗口引用
 async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<Electron.MenuItemConstructorOptions[]> {
     // 获取当前配置
     const proxyConfig = fnConfig.getDownloadProxyConfig();
-    const mpvEnabled = fnConfig.getHideOriginalPlayButton();
     const nasProxyEnabled = fnConfig.getNasProxyEnabled();
     const currentMpvPath = fnConfig.getMpvPlayerPath();
 
@@ -30,22 +29,6 @@ async function createSettingsSubmenu(mainWindow: BrowserWindow | null): Promise<
                 fnConfig.setDownloadProxyConfig({ enabled: newEnabled, proxyUrl: proxyConfig.proxyUrl });
                 // 更新托盘菜单以刷新状态
                 updateTrayMenu();
-            }
-        },
-        {
-            type: 'separator'
-        },
-        {
-            label: `使用 MPV 播放`,
-            type: 'checkbox',
-            checked: mpvEnabled,
-            click: () => {
-                fnConfig.setHideOriginalPlayButton(!mpvEnabled);
-                // 更新托盘菜单以刷新状态
-                updateTrayMenu();
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.reloadIgnoringCache();
-                }
             }
         },
         {

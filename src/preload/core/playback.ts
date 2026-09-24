@@ -1,38 +1,8 @@
 import { ipcRenderer } from 'electron';
-import { isMpvPlaybackEnabled } from '../../modules/fn_config/playbackPreference';
 import { extractItemGuidFromUrl, isItemGuid } from './playTarget';
 import type { PlayMovieData } from './types';
 
-export interface PlayButtonConfig {
-    hideOriginalPlayButton: boolean;
-}
-
 const ITEM_ATTRIBUTES = ['data-item-guid', 'data-item_guid', 'data-guid', 'data-id'];
-let configPromise: Promise<PlayButtonConfig> | null = null;
-
-export function getPlayButtonConfig(): Promise<PlayButtonConfig> {
-    if (configPromise) return configPromise;
-
-    configPromise = new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-            ipcRenderer.off('play-button-config-info', handler);
-            resolve({ hideOriginalPlayButton: false });
-        }, 2000);
-
-        const handler = (_event: Electron.IpcRendererEvent, data?: Partial<PlayButtonConfig>) => {
-            clearTimeout(timeout);
-            ipcRenderer.off('play-button-config-info', handler);
-            resolve({
-                hideOriginalPlayButton: isMpvPlaybackEnabled(data?.hideOriginalPlayButton),
-            });
-        };
-
-        ipcRenderer.once('play-button-config-info', handler);
-        ipcRenderer.send('get-play-button-config');
-    });
-
-    return configPromise;
-}
 
 function readGuidAttribute(element: Element): string | null {
     for (const attribute of ITEM_ATTRIBUTES) {
@@ -118,8 +88,4 @@ export function findSemanticPlayButton(element: Element): HTMLElement | null {
     if (button.querySelector('[data-icon*="play" i], [class*="play-icon" i]')) return button;
 
     return null;
-}
-
-export function isSemanticPlayButton(element: Element): element is HTMLElement {
-    return findSemanticPlayButton(element) !== null;
 }

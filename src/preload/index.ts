@@ -9,13 +9,13 @@ import preloadLogger from './core/logger';
 
 const SEND_CHANNELS = new Set([
     'login', 'delete-history-item', 'clear-history', 'get-config',
-    'get-version', 'check-update', 'get-download-proxy', 'get-play-button-config',
-    'set-download-proxy', 'set-play-button-config',
+    'get-version', 'check-update', 'get-download-proxy',
+    'set-download-proxy',
 ]);
 const RECEIVE_CHANNELS = new Set([
     'config-data', 'history-item-deleted', 'login-error', 'login-success',
-    'version-info', 'update-status', 'download-proxy-info', 'play-button-config-info',
-    'download-proxy-set', 'play-button-config-set',
+    'version-info', 'update-status', 'download-proxy-info',
+    'download-proxy-set',
 ]);
 type PageListener = (...args: unknown[]) => void;
 const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();

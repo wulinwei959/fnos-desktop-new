@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import * as crypto from 'crypto';
 import { app, safeStorage } from 'electron';
 import { USER_DATA_PATH } from '../../public/constants';
-import { isMpvPlaybackEnabled } from './playbackPreference';
 
 const HISTORY_LIMIT = 5;
 const ENCRYPTION_KEY = 'U2XDcFsV6rdTE9wB5ZHvy6BW9hBTKJ1H'; // 32 chars for aes-256
@@ -24,7 +23,6 @@ export interface Config {
     history?: HistoryItem[];
     downloadProxyEnabled?: boolean;
     downloadProxy?: string;
-    hideOriginalPlayButton?: boolean;
     macCloseAction?: 'minimize' | 'quit' | 'ask';
     trayNotificationShown?: boolean;
     nasProxyEnabled?: boolean;
@@ -278,19 +276,6 @@ export function setDownloadProxyConfig({ enabled = true, proxyUrl = 'https://ghf
     writeConfig(config);
 }
 
-// 获取是否启用 MPV 播放接管（沿用旧字段以兼容已有配置）
-export function getHideOriginalPlayButton(): boolean {
-    const config: Config = readConfig() || {};
-    return isMpvPlaybackEnabled(config.hideOriginalPlayButton);
-}
-
-// 设置是否启用 MPV 播放接管
-export function setHideOriginalPlayButton(enabled: boolean): void {
-    const config: Config = readConfig() || {};
-    config.hideOriginalPlayButton = enabled;
-    writeConfig(config);
-}
-
 // 获取NAS本地网盘代理配置
 export function getNasProxyEnabled(): boolean {
     const config: Config = readConfig() || {};
@@ -461,8 +446,6 @@ module.exports = {
     setDownloadProxyUrl,
     getDownloadProxyConfig,
     setDownloadProxyConfig,
-    getHideOriginalPlayButton,
-    setHideOriginalPlayButton,
     getNasProxyEnabled,
     setNasProxyEnabled,
     getMacCloseAction,

@@ -1,6 +1,5 @@
 import { IpcMainEvent } from 'electron';
 import * as fnConfig from '../../../modules/fn_config/config';
-import { isMpvPlaybackEnabled } from '../../../modules/fn_config/playbackPreference';
 import { registerHandler } from '../core/ipcHandler';
 
 /**
@@ -11,10 +10,6 @@ import { registerHandler } from '../core/ipcHandler';
 interface ProxyConfig {
     enabled: boolean;
     proxyUrl: string;
-}
-
-interface PlayButtonConfig {
-    hideOriginalPlayButton: boolean;
 }
 
 // 获取当前代理设置
@@ -34,24 +29,6 @@ function handleSetDownloadProxy(event: IpcMainEvent, { enabled, proxyUrl }: Part
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         event.reply('download-proxy-set', { success: false, error: errorMessage });
-    }
-}
-
-// 获取播放按钮配置
-function handleGetPlayButtonConfig(event: IpcMainEvent): void {
-    event.reply('play-button-config-info', {
-        hideOriginalPlayButton: fnConfig.getHideOriginalPlayButton(),
-    });
-}
-
-// 设置播放按钮配置
-function handleSetPlayButtonConfig(event: IpcMainEvent, config?: Partial<PlayButtonConfig>): void {
-    try {
-        fnConfig.setHideOriginalPlayButton(isMpvPlaybackEnabled(config?.hideOriginalPlayButton));
-        event.reply('play-button-config-set', { success: true });
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        event.reply('play-button-config-set', { success: false, error: errorMessage });
     }
 }
 
@@ -76,8 +53,6 @@ function handleSetNasProxyConfig(event: IpcMainEvent, { nasProxyEnabled }: { nas
 function init(): void {
     registerHandler('get-download-proxy', handleGetDownloadProxy);
     registerHandler('set-download-proxy', handleSetDownloadProxy);
-    registerHandler('get-play-button-config', handleGetPlayButtonConfig);
-    registerHandler('set-play-button-config', handleSetPlayButtonConfig);
     registerHandler('get-nas-proxy', handleGetNasProxyConfig);
     registerHandler('set-nas-proxy', handleSetNasProxyConfig);
 }
