@@ -6,6 +6,7 @@ import { getMainWindow } from '../../common/mainwin';
 import { session } from 'electron';
 import * as log from '../../../modules/logger';
 import { clearAccessGrants } from '../../../modules/fn_api/accessGrant';
+import { currentPartition } from '../../common/partition';
 
 /**
  * 登录拦截插件
@@ -33,7 +34,7 @@ function clearLoginCookies(): void {
     }
 
     // 清除会话中的cookie
-    const ses = session.fromPartition('persist:fntv');
+    const ses = session.fromPartition(currentPartition());
     ses.clearStorageData({
         storages: ['cookies']
     }).then(() => {

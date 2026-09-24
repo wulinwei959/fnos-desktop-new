@@ -3,6 +3,7 @@ import * as path from 'path';
 import { getInstance as getInterceptor } from './core/interceptor';
 import { initAppHooks } from './core/appHook';
 import * as log from '../../modules/logger';
+import { currentPartition } from '../common/partition';
 
 /**
  * 处理器管理器主入口
@@ -47,7 +48,7 @@ function loadPlugins(): void {
  */
 function registerAllPlugins(): void {
     const interceptor = getInterceptor();
-    interceptor.init('persist:fntv');
+    interceptor.init(currentPartition());
     // 加载所有插件
     loadPlugins();
 

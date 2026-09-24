@@ -1,5 +1,6 @@
 import { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 import * as path from 'path';
+import { currentPartition } from './partition';
 
 const isMac = process.platform === 'darwin';
 
@@ -21,7 +22,7 @@ const mainwinConfig: BrowserWindowConstructorOptions = {
     // transparent: true,
     webPreferences: {
         webgl: true,
-        partition: 'persist:fntv',
+        partition: currentPartition(),
         preload: path.join(__dirname, '../../preload/index.js'),
         nodeIntegration: false,
         contextIsolation: true,

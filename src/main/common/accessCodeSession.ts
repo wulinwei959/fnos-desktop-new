@@ -1,5 +1,6 @@
 import { net, session, type Session } from 'electron';
 import { clearAccessGrants, setAccessGrant } from '../../modules/fn_api/accessGrant';
+import { currentPartition } from './partition';
 
 const MAX_REDIRECTS = 5;
 const REJECTED_STATUS_CODES = new Set([401, 403, 429]);
@@ -139,7 +140,7 @@ export const requestAccessCode: GatewayRequester = (gatewaySession, url, headers
 export async function establishAccessCodeSession(
     baseUrl: string,
     accessCode: string,
-    gatewaySession: GatewaySession = session.fromPartition('persist:fntv') as unknown as GatewaySession,
+    gatewaySession: GatewaySession = session.fromPartition(currentPartition()) as unknown as GatewaySession,
     requester: GatewayRequester = requestAccessCode,
 ): Promise<AccessCodeSessionResult> {
     const initialUrl = parseBaseUrl(baseUrl);

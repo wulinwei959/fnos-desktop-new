@@ -1,6 +1,7 @@
 import { session } from 'electron';
 import log from '../logger';
 import { ApiService } from '../fn_api/api';
+import { currentPartition } from '../../main/common/partition';
 
 /**
  * 从配置恢复 cookies
@@ -34,7 +35,7 @@ export async function restoreCookies(domain: string, token: string, isLogin: boo
     // 使用 token 设置 cookie
     log.info('从配置中恢复 cookies, domain:', domain);
 
-    const ses = session.fromPartition('persist:fntv');
+    const ses = session.fromPartition(currentPartition());
     // 根据登录接口返回的 token 格式设置相应的 cookie
     try {
         const isHttps = domain.startsWith('https://');
