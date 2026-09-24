@@ -1068,10 +1068,6 @@
             <!-- fnOS 官方 logo（优先取 NAS 端资源，失败时用本地兜底） -->
             <img id="loginLogo" src="./image/fnos-logo.png" alt="fnOS" />
             <div class="logo-title" id="loginLogoTitle">fnOS</div>
-            <div class="logo-info">
-                <span class="code-by">code by Tag mig hånden</span>
-                <a href="https://github.com/QiaoKes/fntv-electron" class="github-link" target="_blank" rel="noopener noreferrer">github地址</a>
-            </div>
         </div>
         <div class="form-group has-button">
             <label for="domain">域名/IP地址/FN ID</label>
@@ -1104,8 +1100,22 @@
         </div>
         <div id="twofaFields" style="display:none;">
             <div class="native-hint">
-                账号已开启二次验证时使用：点击后将打开飞牛原生登录页，在原生页完成账号密码与动态码验证，通过后自动进入桌面。
+                账号已开启二次验证时使用：输入账号密码后，再输入验证器 App 的 6 位动态码完成登录。
             </div>
+            <div class="form-group">
+                <label for="twofaUsername">用户名</label>
+                <input type="text" id="twofaUsername" placeholder="请输入用户名" spellcheck="false" autocomplete="off" />
+            </div>
+            <div class="form-group has-button">
+                <label for="twofaPassword">密码</label>
+                <input type="password" id="twofaPassword" placeholder="请输入密码" spellcheck="false" autocomplete="off" />
+                <button type="button" class="password-toggle" id="twofaPasswordToggle" title="显示/隐藏密码"><img id="twofaPasswordToggleImg" width="20px" src="./image/password-show.png" alt="显示密码" /></button>
+            </div>
+            <div class="form-group" id="twofaCodeGroup" style="display:none;">
+                <label for="twofaCode">二次验证码</label>
+                <input type="text" id="twofaCode" maxlength="6" inputmode="numeric" placeholder="验证器 App 的 6 位动态码" spellcheck="false" autocomplete="off" />
+            </div>
+            <button type="button" class="native-fallback-btn" id="nativeFallbackBtn">动态码不可用？改用飞牛原生登录页</button>
         </div>
         <div class="switch-container">
             <label class="switch">
@@ -1191,21 +1201,83 @@
         const passwordToggleImg = document.getElementById('passwordToggleImg');
         const accessCodeInput = document.getElementById('accessCode');
 
-        // 登录方式：custom=账号密码(HTTP)；native=二次验证(跳飞牛原生登录页，原生页自带动态码步骤)
+        // 登录方式：custom=账号密码(HTTP)；native=二次验证(自建 WS RPC 动态码流程)
         let loginMode = 'custom';
+        let twofaStage = 'credentials'; // credentials → code（等待动态码）
+        let twofaSessionId = '';
         const modeTabs = document.getElementById('modeTabs');
         const customModeFields = document.getElementById('customModeFields');
         const twofaFields = document.getElementById('twofaFields');
+        const twofaUsernameInput = document.getElementById('twofaUsername');
+        const twofaPasswordInput = document.getElementById('twofaPassword');
+        const twofaCodeGroup = document.getElementById('twofaCodeGroup');
+        const twofaCodeInput = document.getElementById('twofaCode');
+        const nativeFallbackBtn = document.getElementById('nativeFallbackBtn');
+
+        function resetTwofaStage() {
+            twofaStage = 'credentials';
+            twofaSessionId = '';
+            twofaCodeGroup.style.display = 'none';
+        }
+
+        function setTwofaCodeStage(sessionId) {
+            twofaStage = 'code';
+            twofaSessionId = sessionId;
+            twofaCodeGroup.style.display = '';
+            loginBtn.textContent = '验证并登录';
+            twofaCodeInput.focus();
+        }
+
         modeTabs.addEventListener('click', function (e) {
             const tab = e.target.closest('.mode-tab');
             if (!tab || tab.dataset.mode === loginMode) return;
             loginMode = tab.dataset.mode;
+            resetTwofaStage();
             Array.from(modeTabs.querySelectorAll('.mode-tab')).forEach(function (t) {
                 t.classList.toggle('active', t === tab);
             });
             customModeFields.style.display = loginMode === 'custom' ? '' : 'none';
             twofaFields.style.display = loginMode === 'native' ? '' : 'none';
-            loginBtn.textContent = loginMode === 'native' ? '前往原生登录' : '登录';
+            loginBtn.textContent = '登录';
+            checkInputs();
+        });
+
+        // 二次验证密码显隐
+        const twofaPasswordToggle = document.getElementById('twofaPasswordToggle');
+        const twofaPasswordToggleImg = document.getElementById('twofaPasswordToggleImg');
+        twofaPasswordToggle.addEventListener('click', function () {
+            if (twofaPasswordInput.type === 'password') {
+                twofaPasswordInput.type = 'text';
+                twofaPasswordToggleImg.src = './image/password-hide.png';
+            } else {
+                twofaPasswordInput.type = 'password';
+                twofaPasswordToggleImg.src = './image/password-show.png';
+            }
+        });
+
+        // 兜底：跳飞牛原生登录页（管理端 /login，原生自带 2FA 步骤）
+        nativeFallbackBtn.addEventListener('click', function () {
+            const domain = domainInput.value.trim();
+            if (!domain || !isValidDomainOrIP(domain) || isFnId(domain)) return;
+            loginBtn.disabled = true;
+            ipcRenderer.send('native-login', { domain, useHttps: document.getElementById('httpsSwitch').checked });
+            setTimeout(checkInputs, 5000);
+        });
+
+        // 2FA 流程结果统一处理
+        ipcRenderer.on('login-2fa-result', function (event, data) {
+            if (!data) return;
+            if (data.kind === '2fa') {
+                setTwofaCodeStage(data.sessionId);
+                return;
+            }
+            if (data.kind === 'ok') {
+                showCustomMessage('success', '登录成功', '正在进入桌面…');
+                return;
+            }
+            resetTwofaStage();
+            loginBtn.textContent = '登录';
+            showCustomMessage('error', '二次验证登录失败', data.message || '未知错误');
             checkInputs();
         });
         const accessCodeToggle = document.getElementById('accessCodeToggle');
@@ -1381,8 +1453,12 @@
             const domainError = document.getElementById('domainError');
             let valid;
             if (loginMode === 'native') {
-                // 原生二次验证只支持 IP/域名（FN ID 走 OAuth，无需此模式）
-                valid = domain && isValidDomainOrIP(domain) && !isFnId(domain);
+                if (twofaStage === 'code') {
+                    valid = /^\d{6}$/.test(twofaCodeInput.value.trim());
+                } else {
+                    valid = Boolean(domain && isValidDomainOrIP(domain) && !isFnId(domain)
+                        && twofaUsernameInput.value.trim() && twofaPasswordInput.value);
+                }
             } else {
                 const username = usernameInput.value.trim();
                 const password = passwordInput.value.trim();
@@ -1412,24 +1488,39 @@
         domainInput.addEventListener('input', checkInputs);
         usernameInput.addEventListener('input', checkInputs);
         passwordInput.addEventListener('input', checkInputs);
+        twofaUsernameInput.addEventListener('input', checkInputs);
+        twofaPasswordInput.addEventListener('input', checkInputs);
+        twofaCodeInput.addEventListener('input', checkInputs);
 
         // 登录逻辑
         loginBtn.addEventListener('click', function () {
             if (loginBtn.disabled) return;
 
-            // 二次验证模式：交给主进程跳转飞牛原生登录页（原生页自带动态码步骤）
+            // 二次验证模式：两步走（账号密码 → 6 位动态码），走主进程 WS RPC
             if (loginMode === 'native') {
-                loginBtn.textContent = '跳转中...';
+                const domain = domainInput.value.trim();
+                const useHttps = document.getElementById('httpsSwitch').checked;
+                loginBtn.textContent = twofaStage === 'code' ? '验证中...' : '登录中...';
                 loginBtn.disabled = true;
                 loginBtn.classList.remove('enabled');
-                ipcRenderer.send('native-login', {
-                    domain: domainInput.value.trim(),
-                    useHttps: document.getElementById('httpsSwitch').checked,
-                });
+                if (twofaStage === 'code') {
+                    ipcRenderer.send('login-2fa-verify', {
+                        sessionId: twofaSessionId,
+                        code: twofaCodeInput.value.trim(),
+                    });
+                } else {
+                    ipcRenderer.send('login-2fa-start', {
+                        domain: domain,
+                        useHttps: useHttps,
+                        username: twofaUsernameInput.value.trim(),
+                        password: twofaPasswordInput.value,
+                        stay: false,
+                    });
+                }
                 setTimeout(function () {
-                    loginBtn.textContent = '前往原生登录';
+                    loginBtn.textContent = '登录';
                     checkInputs();
-                }, 5000);
+                }, 15000);
                 return;
             }
             
@@ -1742,17 +1833,6 @@
         window.addEventListener('focus', function() {
             // 当窗口重新获得焦点时，确保输入框可以正常工作
             setTimeout(restoreFocus, 100);
-        });
-
-        // GitHub链接点击事件处理
-        document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('github-link')) {
-                e.preventDefault(); // 阻止默认行为
-                const url = e.target.href;
-                window.electronAPI.openExternal(url).catch((error) => {
-                    window.log.error('打开外部链接失败:', error);
-                });
-            }
         });
 
         // 禁止拖拽事件
