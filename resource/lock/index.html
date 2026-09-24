@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'self'" />
+    <title>已锁定</title>
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; user-select: none; }
+        body {
+            font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(1200px 800px at 50% 30%, #1b2735 0%, #0b1016 70%, #06090d 100%);
+            color: #e6edf3; -webkit-app-region: drag;
+        }
+        .card {
+            -webkit-app-region: no-drag;
+            width: 340px; padding: 34px 30px; border-radius: 16px;
+            background: rgba(20, 28, 38, 0.72); border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 18px 60px rgba(0,0,0,0.5); backdrop-filter: blur(14px);
+            text-align: center;
+        }
+        .logo { font-size: 15px; letter-spacing: 2px; opacity: .8; margin-bottom: 6px; }
+        h1 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+        .field { margin-bottom: 12px; }
+        input {
+            width: 100%; padding: 11px 13px; border-radius: 9px; font-size: 15px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff;
+            outline: none;
+        }
+        input:focus { border-color: #3b82f6; }
+        button {
+            width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer;
+            font-size: 15px; font-weight: 600; color: #fff; background: #2563eb; margin-top: 4px;
+        }
+        button:hover { background: #1d4ed8; }
+        .hint { margin-top: 14px; font-size: 12px; opacity: .55; line-height: 1.6; }
+        .err { color: #f87171; font-size: 13px; min-height: 18px; margin-top: 8px; }
+        .hide-btn { margin-top: 10px; background: transparent; color: #9fb0c0; font-weight: 400; font-size: 13px; }
+        .hide-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">FNOS 桌面</div>
+        <h1 id="title">应用已锁定</h1>
+        <div id="setupHint" class="hint" style="display:none">设置开机密码后，锁定或下次启动需输入该密码解锁。</div>
+        <div class="field"><input id="pw1" type="password" placeholder="请输入密码" autocomplete="off" /></div>
+        <div class="field" id="row2" style="display:none"><input id="pw2" type="password" placeholder="再次输入确认" autocomplete="off" /></div>
+        <button id="submit">解锁</button>
+        <button id="hide" class="hide-btn">隐藏到后台（老板键）</button>
+        <div class="err" id="err"></div>
+        <div class="hint">Ctrl+Alt+L 锁定 · Ctrl+Alt+H 隐藏</div>
+    </div>
+    <script src="./lock.js"></script>
+</body>
+</html>

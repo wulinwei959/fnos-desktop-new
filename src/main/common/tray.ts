@@ -5,6 +5,7 @@ import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown }
 import * as log from '../../modules/logger';
 import * as fnConfig from '../../modules/fn_config/config';
 import { toggleSystemPage, systemPageToggleLabel } from './systemPage';
+import { lockApp, openPasswordDialog, hideCompletely } from './lock';
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null; // 主窗口引用
@@ -135,6 +136,21 @@ async function updateTrayMenu(): Promise<void> {
                 // 切换后刷新菜单，让标签在"进入飞牛桌面 / 返回影视"间更新
                 setTimeout(() => { void updateTrayMenu(); }, 800);
             }
+        },
+        {
+            type: 'separator'
+        },
+        {
+            label: '锁定窗口  (Ctrl+Alt+L)',
+            click: () => { lockApp(); }
+        },
+        {
+            label: fnConfig.hasStartupPassword() ? '修改开机密码' : '设置开机密码',
+            click: () => { openPasswordDialog(fnConfig.hasStartupPassword() ? 'change' : 'setup'); }
+        },
+        {
+            label: '隐藏到后台  (Ctrl+Alt+H)',
+            click: () => { hideCompletely(); }
         },
         {
             type: 'separator'

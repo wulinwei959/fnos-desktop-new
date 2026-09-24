@@ -93,7 +93,8 @@
         "files": [
             "dest",
             "build",
-            "resource/login"
+            "resource/login",
+            "resource/lock"
         ]
     }
 }

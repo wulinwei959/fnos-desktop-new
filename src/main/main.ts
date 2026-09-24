@@ -12,6 +12,7 @@ import * as log from '../modules/logger';
 import { getMainWindow } from './common/mainwin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
+import { initLock } from './common/lock';
 
 // 禁用输入法自动切换
 app.commandLine.appendSwitch('--lang', 'en-US');
@@ -91,6 +92,9 @@ if (!gotTheLock) {
 
             // 恢复 Cookie
             await winctrl.setupCookieRestore(mainWindow);
+
+            // 初始化锁屏 / 老板键 / 开机密码（全局快捷键 + 空闲自动锁）
+            initLock();
 
             // TODO(更新源): 基座默认指向上游 QiaoKes/fntv-electron 的 GitHub Releases，
             // 对本合并项目是错误来源（会弹"发现新版本 2.6.2"）。新仓库在 Gitea 且暂无 release，
