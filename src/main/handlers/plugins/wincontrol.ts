@@ -36,8 +36,10 @@ function handleClose(event: IpcMainEvent): void {
 }
 
 // 窗口角色查询：preload 据此决定标题栏渲染规格（子窗口对齐 fnOS 内置窗口规范）
-function handleGetWindowRole(event: IpcMainEvent): 'main' | 'child' {
-    return event.sender === getMainWindow().webContents ? 'main' : 'child';
+function handleGetWindowRole(event: IpcMainEvent): { role: 'main' | 'child'; maximized: boolean } {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const role = event.sender === getMainWindow().webContents ? 'main' : 'child';
+    return { role, maximized: win ? win.isMaximized() : false };
 }
 
 // 注册窗口控制处理器

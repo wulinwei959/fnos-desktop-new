@@ -35,16 +35,28 @@ function detectDark(): boolean {
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-async function getWindowRole(): Promise<'main' | 'child'> {
+const WINDOW_RADIUS = 16; // 对齐 fnOS 桌面内置窗口（如"文件管理"）的 16px 圆角
+
+async function getWindowRole(): Promise<{ role: 'main' | 'child'; maximized: boolean }> {
     try {
-        const role = await ipcRenderer.invoke('get-window-role');
-        return role === 'child' ? 'child' : 'main';
+        const info = await ipcRenderer.invoke('get-window-role');
+        if (info && typeof info === 'object') {
+            return { role: info.role === 'child' ? 'child' : 'main', maximized: Boolean(info.maximized) };
+        }
+        return { role: info === 'child' ? 'child' : 'main', maximized: false };
     } catch {
-        return 'main'; // 主进程不支持角色查询时保持旧行为
+        return { role: 'main', maximized: false }; // 主进程不支持角色查询时保持旧行为
     }
 }
 
-function injectTitleBarDom(role: 'main' | 'child'): void {
+/** 子窗口圆角：透明窗口 + 根元素 clip-path 裁剪（可连同 fixed 定位内容一起裁掉） */
+function applyWindowRadius(maximized: boolean): void {
+    const de = document.documentElement;
+    de.style.setProperty('background', 'transparent', 'important');
+    de.style.clipPath = maximized ? 'none' : `inset(0 round ${WINDOW_RADIUS}px)`;
+}
+
+function injectTitleBarDom(role: 'main' | 'child', maximized: boolean): void {
     logger.info('Injecting custom title bar...', role);
     if (document.getElementById('custom-titlebar')) return;
 
@@ -121,6 +133,14 @@ function injectTitleBarDom(role: 'main' | 'child'): void {
 
     if (!child) return;
 
+    // —— 子窗口：16px 圆角（对齐文件管理窗口），最大化时切回直角 ——
+    let isMaximized = maximized;
+    applyWindowRadius(isMaximized);
+    ipcRenderer.on('window-maximized-changed', (_event, value: unknown) => {
+        isMaximized = Boolean(value);
+        applyWindowRadius(isMaximized);
+    });
+
     // —— 子窗口：标题/图标/主题色实时跟随页面 ——
     const titleEl = bar.querySelector('.tb-title') as HTMLElement;
     const iconEl = bar.querySelector('.tb-icon') as HTMLImageElement;
@@ -141,15 +161,21 @@ function injectTitleBarDom(role: 'main' | 'child'): void {
 
     new MutationObserver(() => { syncTitle(); syncIcon(); })
         .observe(document.head, { childList: true, subtree: true, attributes: true });
-    new MutationObserver(syncTheme)
-        .observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+    new MutationObserver(() => {
+        syncTheme();
+        // 页面脚本若整体重写 <html> style 会丢掉我们的圆角，发现缺失就补回
+        if (!isMaximized && !/round/.test(document.documentElement.style.clipPath || '')) {
+            applyWindowRadius(false);
+        }
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
 }
 
 function injectTitleBar(): void {
     if (document.getElementById('custom-titlebar')) return;
-    void getWindowRole().then((role) => {
-        if (document.body) injectTitleBarDom(role);
-        else document.addEventListener('DOMContentLoaded', () => injectTitleBarDom(role));
+    void getWindowRole().then(({ role, maximized }) => {
+        const run = (): void => injectTitleBarDom(role, maximized);
+        if (document.body) run();
+        else document.addEventListener('DOMContentLoaded', run);
     });
 }
 

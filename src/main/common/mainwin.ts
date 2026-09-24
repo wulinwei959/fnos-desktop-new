@@ -48,11 +48,13 @@ export function getMainWindow(): BrowserWindow {
         // 桌面里通过 window.open 打开的应用窗口（如"飞牛影视"）不会自动继承主窗口的 preload，
         // 必须显式补齐 webPreferences，否则播放按钮注入 / IPC 桥接全部失效。
         // 注意：这里不指定 partition，子窗口继续共享打开者的会话（登录态不丢）。
+        // transparent: 子窗口需要 16px 圆角（对齐 fnOS 内置窗口规范），由 preload 侧 CSS 裁剪实现。
         mainwin.webContents.setWindowOpenHandler(() => ({
             action: 'allow',
             overrideBrowserWindowOptions: {
                 autoHideMenuBar: true,
                 frame: isMac,
+                transparent: true,
                 minWidth: 800,
                 minHeight: 600,
                 icon: mainwinConfig.icon,
@@ -66,6 +68,16 @@ export function getMainWindow(): BrowserWindow {
                 },
             },
         }));
+        // 子窗口最大化/还原时通知渲染端切换圆角（最大化状态下应为直角，与系统窗口行为一致）
+        mainwin.webContents.on('did-create-window', (childWin) => {
+            const pushMaximized = (maximized: boolean): void => {
+                if (!childWin.isDestroyed()) {
+                    childWin.webContents.send('window-maximized-changed', maximized);
+                }
+            };
+            childWin.on('maximize', () => pushMaximized(true));
+            childWin.on('unmaximize', () => pushMaximized(false));
+        });
     }
     return mainwin;
 }
