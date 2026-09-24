@@ -1,6 +1,7 @@
 import { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
 import * as path from 'path';
 import { currentPartition } from './partition';
+import * as log from '../../modules/logger';
 
 const isMac = process.platform === 'darwin';
 
@@ -41,6 +42,9 @@ let mainwin: BrowserWindow | null = null;
 export function getMainWindow(): BrowserWindow {
     if (!mainwin) {
         mainwin = new BrowserWindow(mainwinConfig);
+        // 导航 URL 日志：桌面优先策略下，排查落地/重定向（如 / 是否被重定向到 /v）很有用
+        mainwin.webContents.on('did-navigate', (_e, url) => log.info('[导航] did-navigate →', url));
+        mainwin.webContents.on('did-navigate-in-page', (_e, url) => log.info('[导航] in-page →', url));
     }
     return mainwin;
 }
