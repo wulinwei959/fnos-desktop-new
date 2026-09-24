@@ -1,0 +1,16 @@
+node_modules
+release
+third_party/*
+package-lock.json
+!.gitkip
+*.zip
+log
+*.log
+docs
+dest
+paly_Full.txt
+77777.txt
+play_video.py
+*.exe
+.idea
+.vscode
