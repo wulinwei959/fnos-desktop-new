@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: http: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- 修改 favicon 为 base64 图标 -->
     <link rel="icon" href="./image/logo.png" type="image/png" />
-    <title>飞牛影视</title>
+    <title>fnOS 登录</title>
     <style>
         body {
             background: url("./image/bg-login.webp") no-repeat center center fixed;
@@ -1031,14 +1031,28 @@
             border-radius: 10px;
             margin-bottom: 14px;
         }
+
+        .logo img#loginLogo {
+            width: 64px;
+            border-radius: 14px;
+        }
+
+        .logo-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1f2329;
+            margin-top: 6px;
+            text-align: center;
+        }
     </style>
 </head>
 
 <body>
     <div class="login-container">
         <div class="logo">
-            <!-- 修改 logo 图标为 base64 -->
-            <img src="./image/logo.png" alt="飞牛影视" />
+            <!-- fnOS 官方 logo（优先取 NAS 端资源，失败时用本地兜底） -->
+            <img id="loginLogo" src="./image/fnos-logo.png" alt="fnOS" />
+            <div class="logo-title" id="loginLogoTitle">fnOS</div>
             <div class="logo-info">
                 <span class="code-by">code by Tag mig hånden</span>
                 <a href="https://github.com/QiaoKes/fntv-electron" class="github-link" target="_blank" rel="noopener noreferrer">github地址</a>
@@ -1370,7 +1384,12 @@
             } else {
                 domainInput.classList.remove('error');
                 domainError.style.display = 'none';
+                applyServerTheme(domain, document.getElementById('httpsSwitch').checked);
             }
+        });
+
+        document.getElementById('httpsSwitch').addEventListener('change', function () {
+            applyServerTheme(domainInput.value.trim(), this.checked);
         });
 
         domainInput.addEventListener('input', checkInputs);
@@ -1548,6 +1567,9 @@
                     accessCodeInput.value = item.accessCode || '';
                     document.getElementById('httpsSwitch').checked = item.useHttps === true;
 
+                    // 用所选历史服务器接入 web 端主题
+                    applyServerTheme(item.domain, item.useHttps === true);
+
                     // 关闭下拉框
                     historyDropdown.classList.remove('show');
                     
@@ -1603,6 +1625,29 @@
         }
 
         // 加载配置和历史记录
+        // 接入飞牛 web 端主题：壁纸与 logo 优先取 NAS 匿名静态资源，加载失败保持内置兜底
+        let themedServer = '';
+        function applyServerTheme(rawDomain, useHttps) {
+            const domain = String(rawDomain || '')
+                .trim()
+                .replace(/^https?:\/\//, '')
+                .replace(/["'\s]/g, '')
+                .replace(/\/+$/, '');
+            if (!domain) return;
+            const server = (useHttps ? 'https://' : 'http://') + domain;
+            if (server === themedServer) return;
+            const probe = new Image();
+            probe.onload = function () {
+                themedServer = server;
+                document.body.style.backgroundImage = 'url("' + server + '/static/bg/wallpaper-1.webp")';
+                const logo = document.getElementById('loginLogo');
+                const logoProbe = new Image();
+                logoProbe.onload = function () { logo.src = server + '/static/img/trim-logo.png'; };
+                logoProbe.src = server + '/static/img/trim-logo.png';
+            };
+            probe.src = server + '/static/bg/wallpaper-1.webp';
+        }
+
         function loadConfigData() {
             ipcRenderer.send('get-config');
         }
@@ -1630,6 +1675,11 @@
             
             // 渲染历史记录
             renderHistoryList();
+
+            // 用已保存的服务器接入 web 端主题（壁纸/logo）
+            if (config && config.domain) {
+                applyServerTheme(config.domain, config.useHttps);
+            }
             
             // 检查输入状态
             checkInputs();

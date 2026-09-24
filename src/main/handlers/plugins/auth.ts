@@ -189,13 +189,14 @@ async function handleLogin(
         // 保存登录信息
         const { saveConfig, addHistory } = require('../../../modules/fn_config/config');
 
-        // 保存配置
+        // 保存配置（账号密码方式：显式清除"原生登录"标记）
         saveConfig({
             account: loginData.username,
             domain: server,
             token: response.data.token,
             accessCode,
-            useHttps: server.startsWith('https://')
+            useHttps: server.startsWith('https://'),
+            nativeLogin: false,
         });
 
         // 添加到登录历史

@@ -199,7 +199,8 @@ export function saveConfig({ account, domain, token, accessCode, useHttps, nativ
     config.token = token;
     if (accessCode !== undefined) config.accessCode = accessCode;
     config.useHttps = useHttps || false;
-    config.nativeLogin = nativeLogin === true;
+    // 未显式传值时保留原标记（如 media 补写 token 不应清掉"原生登录"方式）
+    if (nativeLogin !== undefined) config.nativeLogin = nativeLogin;
     writeConfig(config);
 }
 
