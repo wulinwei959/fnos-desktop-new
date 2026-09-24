@@ -41,6 +41,11 @@ function injectOne(): void {
         mpvBtn.type = 'button';
         mpvBtn.textContent = 'MPV 播放';
         mpvBtn.dataset.customPlay = 'true'; // 关键：让 findSemanticPlayButton 跳过它，避免被当成播放键重复注入/劫持
+        // 图标统一：克隆原生播放按钮的 SVG 图标（▶）放到文字前，与原生按钮保持"图标+文字"一致外观
+        const nativeIcon = playBtn.querySelector('svg');
+        if (nativeIcon) {
+            mpvBtn.insertBefore(nativeIcon.cloneNode(true), mpvBtn.firstChild);
+        }
         // 样式统一：直接继承原生播放按钮的类名（Semi 组件样式），只加一点左间距；
         // 原生按钮若无类名（异常场景）再回退到内置的胶囊样式。
         if (typeof playBtn.className === 'string' && playBtn.className.trim()) {
