@@ -1,4 +1,5 @@
 import { IpcMainEvent, session } from 'electron';
+import * as path from 'path';
 import { getMainWindow } from '../../common/mainwin';
 import { resolveHomeUrl } from '../../common/systemPage';
 import * as fn from '../../../modules/fn_api/api';
@@ -344,6 +345,15 @@ async function handleNativeLogin(event: IpcMainEvent, data?: { domain?: string; 
     }, 1000);
 }
 
+// 从原生登录页返回自定义登录页：停止轮询、恢复拦截、加载应用登录页
+function handleExitNativeLogin(event: IpcMainEvent): void {
+    const mainWindow = getMainWindow();
+    if (event.sender !== mainWindow.webContents) return;
+    stopNativeLoginWatch();
+    log.info('[原生登录] 用户返回应用登录页');
+    mainWindow.loadFile(path.join(__dirname, '../../../../resource/login/index.html'));
+}
+
 // 注册认证相关处理器
 function init(): void {
     registerHandler('get-config', handleGetConfig);
@@ -351,6 +361,7 @@ function init(): void {
     registerHandler('delete-history-item', handleDeleteHistoryItem);
     registerHandler('login', handleLogin);
     registerHandler('native-login', handleNativeLogin);
+    registerHandler('exit-native-login', handleExitNativeLogin);
 }
 
 export {

@@ -18,6 +18,8 @@ const BAR_STYLE = `
 #custom-titlebar .tb-btn{background:transparent;border:none;width:46px;height:100%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tb-fg);transition:background .15s ease}
 #custom-titlebar .tb-btn:hover{background:var(--tb-hover);color:#fff}
 #custom-titlebar .tb-btn.close:hover{background:var(--tb-close-hover);color:#fff}
+#custom-titlebar .tb-btn-back{-webkit-app-region:no-drag;background:transparent;border:none;color:var(--tb-fg);font-size:13px;padding:0 12px;height:60%;margin-left:6px;border-radius:6px;cursor:pointer;transition:background .15s ease}
+#custom-titlebar .tb-btn-back:hover{background:var(--tb-hover)}
 #custom-titlebar .tb-left{display:flex;align-items:center;gap:8px;padding-left:12px;min-width:0;max-width:60%}
 #custom-titlebar .tb-icon{width:16px;height:16px;flex:none}
 #custom-titlebar .tb-title{font-size:14px;font-weight:400;color:var(--tb-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
@@ -112,7 +114,7 @@ function injectTitleBarDom(role: 'main' | 'child', maximized: boolean): void {
         ? ''
         : child
             ? `<div class="tb-left"><img class="tb-icon" alt=""><span class="tb-title"></span></div>${buttons}`
-            : `<div style="flex:1;height:100%;"></div>${buttons}`;
+            : `<button id="back-to-app-btn" class="tb-btn-back" style="display:none">‹ 返回应用登录</button><div style="flex:1;height:100%;"></div>${buttons}`;
 
     // 添加body顶部内边距；防止出现双重滚动条
     document.body.style.paddingTop = '10px';
@@ -140,7 +142,19 @@ function injectTitleBarDom(role: 'main' | 'child', maximized: boolean): void {
     syncVisibility();
     setInterval(syncVisibility, 800);
 
-    if (!child) return;
+    if (!child) {
+        // 主窗口进入飞牛原生登录页（二次验证跳转）后，提供返回应用登录页的入口
+        const backBtn = document.getElementById('back-to-app-btn');
+        const syncBackBtn = (): void => {
+            if (backBtn) backBtn.style.display = /^\/(v\/)?login$/.test(location.pathname) ? '' : 'none';
+        };
+        syncBackBtn();
+        setInterval(syncBackBtn, 800);
+        backBtn?.addEventListener('click', () => {
+            ipcRenderer.send('exit-native-login');
+        });
+        return;
+    }
 
     // —— 子窗口：16px 圆角（对齐文件管理窗口），最大化时切回直角 ——
     let isMaximized = maximized;
