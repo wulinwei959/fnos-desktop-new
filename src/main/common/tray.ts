@@ -141,7 +141,7 @@ async function updateTrayMenu(): Promise<void> {
             type: 'separator'
         },
         {
-            label: '锁定窗口  (Ctrl+Alt+L)',
+            label: '锁定窗口',
             click: () => { lockApp(); }
         },
         {
@@ -149,7 +149,7 @@ async function updateTrayMenu(): Promise<void> {
             click: () => { openPasswordDialog(fnConfig.hasStartupPassword() ? 'change' : 'setup'); }
         },
         {
-            label: '隐藏到后台  (Ctrl+Alt+H)',
+            label: '隐藏到后台',
             click: () => { hideCompletely(); }
         },
         {

@@ -5,7 +5,7 @@
  * - 全局快捷键：Ctrl+Alt+L 锁定、Ctrl+Alt+H 老板键隐藏。
  * - 空闲自动锁：按 lockPolicy 决策（全屏播放时豁免）。
  */
-import { BrowserWindow, globalShortcut, powerMonitor, ipcMain, app } from 'electron';
+import { BrowserWindow, powerMonitor, ipcMain, app } from 'electron';
 import * as path from 'path';
 import * as log from '../../modules/logger';
 import { createPasswordRecord, verifyPassword } from '../../modules/security/password';
@@ -21,7 +21,6 @@ type LockMode = 'unlock' | 'setup' | 'change';
 let lockWin: BrowserWindow | null = null;
 let locked = false;
 let idleTimer: NodeJS.Timeout | null = null;
-let shortcutsOk = false;
 
 function alive(w: BrowserWindow | null): w is BrowserWindow {
     return !!w && !w.isDestroyed();
@@ -105,18 +104,6 @@ export function hideCompletely(): void {
     log.info('[lock] 已隐藏到后台（老板键）');
 }
 
-function registerGlobalShortcuts(): void {
-    if (shortcutsOk) return;
-    try {
-        const okL = globalShortcut.register('CommandOrControl+Alt+L', () => lockApp());
-        const okH = globalShortcut.register('CommandOrControl+Alt+H', () => hideCompletely());
-        shortcutsOk = !!(okL && okH);
-        log.info(`[lock] 全局快捷键注册：锁定=${okL} 隐藏=${okH}`);
-    } catch (e) {
-        log.error('[lock] 注册全局快捷键失败:', e);
-    }
-}
-
 function startIdleAutoLock(): void {
     if (idleTimer) return;
     idleTimer = setInterval(() => {
@@ -150,11 +137,9 @@ export function initLock(): void {
         return { ok: true };
     });
     ipcMain.on('lock:hide', () => { hideCompletely(); });
-    registerGlobalShortcuts();
     startIdleAutoLock();
     app.on('before-quit', () => {
         if (idleTimer) { clearInterval(idleTimer); idleTimer = null; }
-        try { globalShortcut.unregisterAll(); } catch { /* noop */ }
     });
     log.info('[lock] 锁屏模块已初始化');
 }
