@@ -13,6 +13,7 @@ import { getMainWindow } from './common/mainwin';
 import { isTrusted, showCertificateTrustDialog } from '../modules/cert_trust';
 import { startProxyProcess, shutdownProxyProcess } from './common/proxy';
 import { initLock } from './common/lock';
+import { isNativeLoginActive } from './handlers/plugins/login';
 
 // 禁用输入法自动切换
 app.commandLine.appendSwitch('--lang', 'en-US');
@@ -114,6 +115,19 @@ if (!gotTheLock) {
 // 设置窗口事件
 function setupWindowEvents(mainWindow: BrowserWindow): void {
     if (mainWindow) {
+        // SPA 页内路由（pushState）跳向 /login 不经过网络层，webRequest 拦不到，
+        // 需在导航事件层拦回自定义登录页。原生二次验证登录进行中时放行。
+        mainWindow.webContents.on('did-navigate-in-page', (_event, url) => {
+            if (isNativeLoginActive()) return;
+            try {
+                const route = new URL(url).pathname;
+                if (route === '/login' || route === '/v/login') {
+                    log.info('[登录] 命中页内登录路由:', route, '，拉回自定义登录页');
+                    mainWindow.loadFile(path.join(__dirname, '../../resource/login/index.html'));
+                }
+            } catch { /* 无效 URL 忽略 */ }
+        });
+
         // 监听窗口关闭事件
         mainWindow.on('close', async (event) => {
             if (!(app as any).isQuiting) {

@@ -889,6 +889,148 @@
             transform: translateY(0);
             box-shadow: 0 2px 10px rgba(51, 112, 255, 0.3);
         }
+        /* ===== fnOS 原生风格视觉覆盖层（浅色玻璃卡片） ===== */
+        body {
+            color: #1f2329;
+        }
+
+        .login-container {
+            width: 400px;
+            padding: 28px 32px;
+            background: rgba(255, 255, 255, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            border-radius: 24px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+            backdrop-filter: blur(28px) saturate(1.4);
+            -webkit-backdrop-filter: blur(28px) saturate(1.4);
+            color: #1f2329;
+        }
+
+        .login-container label {
+            color: #3d434c;
+        }
+
+        .login-container input[type='text'],
+        .login-container input[type='password'] {
+            background: #fff;
+            color: #1f2329;
+            border: 1px solid rgba(31, 35, 41, 0.12);
+            border-radius: 12px;
+        }
+
+        .login-container input::placeholder {
+            color: rgba(31, 35, 41, 0.4);
+        }
+
+        .login-container input:focus {
+            border-color: #0066ff;
+            background: #fff;
+        }
+
+        .code-by {
+            color: rgba(31, 35, 41, 0.5);
+        }
+
+        .github-link {
+            color: rgba(31, 35, 41, 0.65);
+            border-color: rgba(31, 35, 41, 0.15);
+        }
+
+        .github-link:hover {
+            color: #0066ff;
+            background: rgba(0, 102, 255, 0.08);
+            border-color: rgba(0, 102, 255, 0.25);
+        }
+
+        .switch-label {
+            color: #3d434c;
+        }
+
+        .login-btn {
+            background: #0066ff;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+        }
+
+        .login-btn.enabled:hover {
+            background: #0057d9;
+        }
+
+        .version-text {
+            color: rgba(31, 35, 41, 0.55);
+        }
+
+        .update-btn {
+            color: rgba(31, 35, 41, 0.65);
+            border-color: rgba(31, 35, 41, 0.15);
+        }
+
+        .update-btn:hover {
+            color: #0066ff;
+            border-color: rgba(0, 102, 255, 0.35);
+        }
+
+        .history-dropdown {
+            background: rgba(255, 255, 255, 0.97);
+            border: 1px solid rgba(31, 35, 41, 0.08);
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+            color: #1f2329;
+        }
+
+        .history-item {
+            color: #1f2329;
+            border-bottom-color: rgba(31, 35, 41, 0.06);
+        }
+
+        .history-item:hover {
+            background: rgba(0, 102, 255, 0.06);
+        }
+
+        .no-history {
+            color: rgba(31, 35, 41, 0.45);
+        }
+
+        /* 登录方式选项卡 */
+        .mode-tabs {
+            display: flex;
+            gap: 4px;
+            margin: 16px 0 14px;
+            padding: 4px;
+            background: rgba(31, 35, 41, 0.06);
+            border-radius: 12px;
+        }
+
+        .mode-tab {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 8px 0;
+            border-radius: 9px;
+            font-size: 14px;
+            color: #5a626c;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .mode-tab.active {
+            background: #fff;
+            color: #1f2329;
+            font-weight: 600;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+        }
+
+        .native-hint {
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: #3d5478;
+            background: rgba(0, 102, 255, 0.07);
+            border: 1px solid rgba(0, 102, 255, 0.16);
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin-bottom: 14px;
+        }
     </style>
 </head>
 
@@ -911,6 +1053,11 @@
             </div>
             <div id="domainError" class="error-msg" style="display:none;">请正确填写IPV4、IPV6、域名或 FN ID（6-30位，不含点号）</div>
         </div>
+        <div class="mode-tabs" id="modeTabs">
+            <button type="button" class="mode-tab active" data-mode="custom">账号密码</button>
+            <button type="button" class="mode-tab" data-mode="native">二次验证</button>
+        </div>
+        <div id="customModeFields">
         <div class="form-group">
             <label for="username">用户名</label>
             <input type="text" id="username" placeholder="请输入用户名" spellcheck="false" tabindex="2" />
@@ -924,6 +1071,10 @@
             <label for="accessCode">访问码（可选）</label>
             <input type="password" id="accessCode" placeholder="服务器未启用访问码时请留空" spellcheck="false" autocomplete="off" tabindex="4" />
             <button type="button" class="password-toggle" id="accessCodeToggle" title="显示访问码"><img id="accessCodeToggleImg" width="20px" src="./image/password-show.png" alt="显示访问码" /></button>
+        </div>
+        </div>
+        <div class="native-hint" id="nativeModeHint" style="display:none;">
+            账号开启了二次验证（动态口令）时使用：点击登录后将打开飞牛原生登录页，在原生页完成账号密码与二次验证后自动返回。
         </div>
         <div class="switch-container">
             <label class="switch">
@@ -1008,6 +1159,24 @@
         const passwordToggle = document.getElementById('passwordToggle');
         const passwordToggleImg = document.getElementById('passwordToggleImg');
         const accessCodeInput = document.getElementById('accessCode');
+
+        // 登录方式：custom=账号密码(HTTP)；native=二次验证(跳原生 /v/login 页)
+        let loginMode = 'custom';
+        const modeTabs = document.getElementById('modeTabs');
+        const customModeFields = document.getElementById('customModeFields');
+        const nativeModeHint = document.getElementById('nativeModeHint');
+        modeTabs.addEventListener('click', function (e) {
+            const tab = e.target.closest('.mode-tab');
+            if (!tab || tab.dataset.mode === loginMode) return;
+            loginMode = tab.dataset.mode;
+            Array.from(modeTabs.querySelectorAll('.mode-tab')).forEach(function (t) {
+                t.classList.toggle('active', t === tab);
+            });
+            customModeFields.style.display = loginMode === 'custom' ? '' : 'none';
+            nativeModeHint.style.display = loginMode === 'native' ? '' : 'none';
+            loginBtn.textContent = loginMode === 'native' ? '前往原生登录' : '登录';
+            checkInputs();
+        });
         const accessCodeToggle = document.getElementById('accessCodeToggle');
         const accessCodeToggleImg = document.getElementById('accessCodeToggleImg');
         const historyBtn = document.getElementById('historyBtn');
@@ -1178,17 +1347,18 @@
 
         function checkInputs() {
             const domain = domainInput.value.trim();
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value.trim();
             const domainError = document.getElementById('domainError');
-
-            if (domain && isValidDomainOrIP(domain) && username && password) {
-                loginBtn.disabled = false;
-                loginBtn.classList.add('enabled');
+            let valid;
+            if (loginMode === 'native') {
+                // 原生二次验证只支持 IP/域名（FN ID 走 OAuth，无需此模式）
+                valid = domain && isValidDomainOrIP(domain) && !isFnId(domain);
             } else {
-                loginBtn.disabled = true;
-                loginBtn.classList.remove('enabled');
+                const username = usernameInput.value.trim();
+                const password = passwordInput.value.trim();
+                valid = domain && isValidDomainOrIP(domain) && username && password;
             }
+            loginBtn.disabled = !valid;
+            loginBtn.classList.toggle('enabled', Boolean(valid));
         }
 
         // 失去焦点时显示红色提示
@@ -1210,6 +1380,22 @@
         // 登录逻辑
         loginBtn.addEventListener('click', function () {
             if (loginBtn.disabled) return;
+
+            // 二次验证模式：交给主进程跳转飞牛原生登录页
+            if (loginMode === 'native') {
+                loginBtn.textContent = '跳转中...';
+                loginBtn.disabled = true;
+                loginBtn.classList.remove('enabled');
+                ipcRenderer.send('native-login', {
+                    domain: domainInput.value.trim(),
+                    useHttps: document.getElementById('httpsSwitch').checked,
+                });
+                setTimeout(function () {
+                    loginBtn.textContent = '前往原生登录';
+                    checkInputs();
+                }, 5000);
+                return;
+            }
             
             // 设置登录中状态
             const originalText = loginBtn.textContent;

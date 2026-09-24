@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, IpcMainEvent } from 'electron';
+import { app, BrowserWindow, dialog, IpcMainEvent, session } from 'electron';
 import * as ply from '../../../modules/players';
 import * as fn from '../../../modules/fn_api/api';
 import * as fnConfig from '../../../modules/fn_config/config';
@@ -11,6 +11,7 @@ import { PlayStatusData, ItemListRequest } from '../../../modules/fn_api/types';
 import { isTrusted } from '../../../modules/cert_trust';
 import { checkLibraryPageUrl } from '../../common/utils';
 import { getMainWindow } from '../../common/mainwin';
+import { currentPartition } from '../../common/partition';
 import { getMpvConfigDir } from './mpvConfig';
 import { resolveBundledMpvPath } from '../../common/mpvConfigHelpers';
 import { getProxySecret } from '../../common/proxy';
@@ -239,10 +240,35 @@ async function handlePlayMovie(_event: IpcMainEvent, request: PlayRequest): Prom
     }
 }
 
+/**
+ * 原生登录（二次验证）模式下 config 里可能没有媒体 token：
+ * 影视应用打开时管理端 SSO 会写 Trim-MC-token cookie，这里补取并回写，播放链路即可恢复。
+ */
+async function ensureMediaToken(config: { domain?: string; token?: string; account?: string; useHttps?: boolean }): Promise<void> {
+    if (config.token && config.account) return;
+    if (!config.domain) return;
+    try {
+        const cookies = await session.fromPartition(currentPartition()).cookies.get({ url: config.domain, name: 'Trim-MC-token' });
+        const token = cookies[0]?.value;
+        if (!token) return;
+        const fnapi = new fn.ApiService(config.domain, token);
+        const info = await fnapi.getUserInfo(5000, 0);
+        if (!info || !info.success) return;
+        const account = info.data?.username || '';
+        fnConfig.saveConfig({ account, domain: config.domain, token, useHttps: config.useHttps });
+        config.token = token;
+        config.account = account;
+        log.info('[播放] 已从会话 cookie 补齐媒体 token, username:', account);
+    } catch (error) {
+        log.warn('[播放] 补齐媒体 token 失败:', error);
+    }
+}
+
 async function startPlayback({ id, sourceIndex }: PlayRequest): Promise<void> {
     log.info('Play movie event received id:', id, ' index:', sourceIndex);
 
     const config = fnConfig.readConfig();
+    await ensureMediaToken(config || {});
     if (!config?.domain || !config.token || !config.account) {
         throw new Error('无法找到有效的服务器登录配置');
     }

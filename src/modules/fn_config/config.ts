@@ -20,6 +20,8 @@ export interface Config {
     token?: string;
     accessCode?: string;
     useHttps?: boolean;
+    /** 二次验证（原生登录页）方式：会话以管理端 cookie 为准，媒体 token 由影视应用 SSO 补齐 */
+    nativeLogin?: boolean;
     history?: HistoryItem[];
     downloadProxyEnabled?: boolean;
     downloadProxy?: string;
@@ -59,6 +61,7 @@ export interface SaveConfigParams {
     token: string;
     accessCode?: string;
     useHttps?: boolean;
+    nativeLogin?: boolean;
 }
 
 /**
@@ -189,13 +192,14 @@ export function readConfig(): Config | null {
 }
 
 // 保存配置（账号、域名、token、HTTPS设置）
-export function saveConfig({ account, domain, token, accessCode, useHttps }: SaveConfigParams): void {
+export function saveConfig({ account, domain, token, accessCode, useHttps, nativeLogin }: SaveConfigParams): void {
     const config: Config = readConfig() || {};
     config.account = account;
     config.domain = domain;
     config.token = token;
     if (accessCode !== undefined) config.accessCode = accessCode;
     config.useHttps = useHttps || false;
+    config.nativeLogin = nativeLogin === true;
     writeConfig(config);
 }
 

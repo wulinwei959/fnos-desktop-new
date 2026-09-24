@@ -96,8 +96,22 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
         mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
         return;
     }
-    if (!savedConfig || !savedConfig.token || !savedConfig.domain) {
+    if (!savedConfig || !savedConfig.domain) {
         log.warn('没有找到已保存的配置，无法恢复 cookie');
+        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        return;
+    }
+
+    // 二次验证（原生登录页）方式：管理端会话由其 cookie/"保持登录"维持，直接进桌面；
+    // 会话失效时 SPA 会跳 /login，被拦截回自定义登录页重新选择方式。
+    if (savedConfig.nativeLogin) {
+        log.info('恢复原生登录会话（管理端 cookie 维持），直接跳转到桌面');
+        mainWindow.loadURL(resolveHomeUrl(savedConfig.domain));
+        return;
+    }
+
+    if (!savedConfig.token) {
+        log.warn('没有找到已保存的 token，无法恢复 cookie');
         mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
         return;
     }

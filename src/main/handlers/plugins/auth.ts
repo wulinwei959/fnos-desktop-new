@@ -1,4 +1,4 @@
-import { IpcMainEvent } from 'electron';
+import { IpcMainEvent, session } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
 import { resolveHomeUrl } from '../../common/systemPage';
 import * as fn from '../../../modules/fn_api/api';
@@ -8,6 +8,8 @@ import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
+import { setNativeLoginActive } from './login';
+import { currentPartition } from '../../common/partition';
 import {
     AccessCodeVerificationError,
     establishAccessCodeSession,
@@ -242,12 +244,112 @@ async function handleLogin(
     }
 }
 
+// 原生登录（二次验证）：把整个登录流程交给飞牛管理端原生 /login 页（支持动态口令与"保持登录"）。
+// 管理端登录成功会写入会话 cookie ost；若媒体 token（Trim-MC-token）也已就绪则一并回写 config，
+// 否则以 nativeLogin 标记会话由管理端 cookie 维持（重启后管理端凭"保持登录"自动恢复）。
+let nativeLoginTimer: NodeJS.Timeout | null = null;
+
+function stopNativeLoginWatch(): void {
+    if (nativeLoginTimer) {
+        clearInterval(nativeLoginTimer);
+        nativeLoginTimer = null;
+    }
+    setNativeLoginActive(false);
+}
+
+/**
+ * 管理端登录写入的 ost/osrt 默认是会话 cookie，Electron 退出即清空。
+ * 把它们续成 30 天持久 cookie，重启后管理端凭 osrt 自动换回会话（原生"保持登录"等效）。
+ */
+async function persistSessionCookies(ses: Electron.Session, server: string): Promise<void> {
+    const expires = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
+    const cookies = await ses.cookies.get({ url: server });
+    for (const cookie of cookies) {
+        if (cookie.expirationDate) continue;
+        try {
+            await ses.cookies.set({
+                url: server,
+                name: cookie.name,
+                value: cookie.value,
+                path: cookie.path || '/',
+                secure: cookie.secure,
+                httpOnly: cookie.httpOnly,
+                sameSite: cookie.sameSite === 'no_restriction' ? 'no_restriction' : 'lax',
+                expirationDate: expires,
+            });
+        } catch (error) {
+            log.warn('[原生登录] 持久化 cookie 失败:', cookie.name, error);
+        }
+    }
+}
+
+async function handleNativeLogin(event: IpcMainEvent, data?: { domain?: string; useHttps?: boolean }): Promise<void> {
+    const domain = data?.domain?.trim();
+    const mainWindow = getMainWindow();
+    if (!data || !domain || isFnId(domain) || !mainWindow) {
+        event.reply('login-error', {
+            title: '无法打开原生登录页',
+            message: '请输入有效的 IP 地址或域名（FN ID 无需二次验证，请用账号密码方式登录）。',
+        });
+        return;
+    }
+
+    const server = data.useHttps ? `https://${domain}` : `http://${domain}`;
+    const useHttps = !!data.useHttps;
+    log.info('[原生登录] 跳转到管理端原生登录页（含二次验证）:', server);
+
+    // 清掉旧 cookie，确保原生页展示登录表单而不是自动进入桌面
+    const ses = session.fromPartition(currentPartition());
+    await ses.clearStorageData({ storages: ['cookies'] });
+
+    setNativeLoginActive(true);
+    mainWindow.loadURL(`${server}/login`);
+
+    if (nativeLoginTimer) clearInterval(nativeLoginTimer);
+    const deadline = Date.now() + 10 * 60 * 1000;
+    nativeLoginTimer = setInterval(async () => {
+        try {
+            if (Date.now() > deadline) {
+                stopNativeLoginWatch();
+                log.warn('[原生登录] 超时未完成，恢复自定义登录拦截');
+                return;
+            }
+            const sessionCookies = await ses.cookies.get({ url: server, name: 'ost' });
+            if (sessionCookies.length === 0) return;
+
+            // 管理端登录完成。顺带尝试捕获媒体 token（影视应用 SSO 时写入），能拿到就一起回写
+            let account = '';
+            let token = '';
+            const mediaCookies = await ses.cookies.get({ url: server, name: 'Trim-MC-token' });
+            const mediaToken = mediaCookies[0]?.value;
+            if (mediaToken) {
+                const fnapi = new fn.ApiService(server, mediaToken);
+                const info = await fnapi.getUserInfo(5000, 0);
+                if (info && info.success) {
+                    token = mediaToken;
+                    account = info.data?.username || '';
+                }
+            }
+
+            fnConfig.saveConfig({ account, domain: server, token, useHttps, nativeLogin: true });
+            fnConfig.addHistory({ domain, account, password: '', useHttps });
+            await persistSessionCookies(ses, server);
+            stopNativeLoginWatch();
+            log.info('[原生登录] 登录完成，进入桌面（媒体 token:', token ? '已回写' : '待影视应用 SSO', ')');
+            mainWindow.loadURL(resolveHomeUrl(server));
+        } catch (error) {
+            log.error('[原生登录] 轮询登录状态失败:', error);
+        }
+    }, 1000);
+}
+
 // 注册认证相关处理器
 function init(): void {
     registerHandler('get-config', handleGetConfig);
     registerHandler('clear-history', handleClearHistory);
     registerHandler('delete-history-item', handleDeleteHistoryItem);
     registerHandler('login', handleLogin);
+    registerHandler('native-login', handleNativeLogin);
 }
 
 export {

@@ -14,6 +14,23 @@ import { currentPartition } from '../../common/partition';
  */
 
 /**
+ * 原生登录放行开关：
+ * 二次验证（2FA）走飞牛原生 /v/login 页时，需要临时放行 login-interceptor，
+ * 否则原生登录页会被本拦截器再次拉回自定义登录页，形成死循环。
+ * 由 auth.ts 的 native-login 流程在跳转前置 true、登录完成或失败后置 false。
+ */
+let nativeLoginActive = false;
+
+function setNativeLoginActive(active: boolean): void {
+    nativeLoginActive = active;
+    log.info('[原生登录] 拦截器放行状态:', active);
+}
+
+function isNativeLoginActive(): boolean {
+    return nativeLoginActive;
+}
+
+/**
  * 清空登录信息和Cookie
  */
 function clearLoginCookies(): void {
@@ -50,6 +67,12 @@ function clearLoginCookies(): void {
  * @param callback - 回调函数
  */
 function handleLoginRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
+    // 原生 2FA 登录进行中：放行，不拉回自定义页
+    if (nativeLoginActive) {
+        callback({});
+        return;
+    }
+
     log.info('检测到登录请求，清空登录信息并跳转到登录页面');
     
     // 清空配置cookie
@@ -104,6 +127,9 @@ function init(): void {
                 'https://*/v/login',
                 'http://*/v/welcome',
                 'https://*/v/welcome',
+                // fnOS 管理端会话过期会跳根路径 /login（不带 /v），同样拉回自定义登录页
+                'http://*/login',
+                'https://*/login',
             ]
         },
         handleLoginRequest,
@@ -127,4 +153,6 @@ function init(): void {
 
 export {
     init,
+    setNativeLoginActive,
+    isNativeLoginActive,
 };
