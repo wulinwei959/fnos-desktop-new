@@ -35,11 +35,17 @@ function handleClose(event: IpcMainEvent): void {
     if (win) win.close();
 }
 
+// 窗口角色查询：preload 据此决定标题栏渲染规格（子窗口对齐 fnOS 内置窗口规范）
+function handleGetWindowRole(event: IpcMainEvent): 'main' | 'child' {
+    return event.sender === getMainWindow().webContents ? 'main' : 'child';
+}
+
 // 注册窗口控制处理器
 function init(): void {
     registerHandler('window-minimize', handleMinimize);
     registerHandler('window-maximize', handleMaximize);
     registerHandler('window-close', handleClose);
+    registerHandler('get-window-role', handleGetWindowRole, { useHandle: true });
 }
 
 export {

@@ -4,16 +4,63 @@ import { registerHook } from '../core/hooks';
 import { HookType } from '../core/hooks';
 import logger from '../core/logger';
 
-function injectTitleBar(): void {
-    logger.info('Injecting custom title bar...');
+/**
+ * 注入自定义标题栏（无边框窗口的拖动区 + 窗口控制按钮）。
+ * 子窗口（桌面 window.open 打开的飞牛影视/相册等）对齐 fnOS 桌面内置应用
+ * 窗口（如"文件管理"）的标题栏规范：44px 高、左侧应用图标 + 标题（14px）、
+ * 图标颜色跟随页面明暗主题；主窗口保持原有 32px 透明样式。
+ */
+
+const BAR_STYLE = `
+#custom-titlebar{--tb-fg:#888;--tb-hover:rgba(0,0,0,.08);--tb-close-hover:rgba(232,17,35,.9)}
+#custom-titlebar[data-theme=light]{--tb-fg:rgb(11,11,12);--tb-hover:rgba(0,0,0,.08)}
+#custom-titlebar[data-theme=dark]{--tb-fg:rgba(255,255,255,.85);--tb-hover:rgba(255,255,255,.14)}
+#custom-titlebar .tb-btn{background:transparent;border:none;width:46px;height:100%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tb-fg);transition:background .15s ease}
+#custom-titlebar .tb-btn:hover{background:var(--tb-hover);color:#fff}
+#custom-titlebar .tb-btn.close:hover{background:var(--tb-close-hover);color:#fff}
+#custom-titlebar .tb-left{display:flex;align-items:center;gap:8px;padding-left:12px;min-width:0;max-width:60%}
+#custom-titlebar .tb-icon{width:16px;height:16px;flex:none}
+#custom-titlebar .tb-title{font-size:14px;font-weight:400;color:var(--tb-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none}
+`;
+
+function currentFavicon(): string | null {
+    const link = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+    return link?.href || null;
+}
+
+function detectDark(): boolean {
+    const cls = document.documentElement.classList;
+    if (cls.contains('dark')) return true;
+    if (cls.contains('light')) return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+async function getWindowRole(): Promise<'main' | 'child'> {
+    try {
+        const role = await ipcRenderer.invoke('get-window-role');
+        return role === 'child' ? 'child' : 'main';
+    } catch {
+        return 'main'; // 主进程不支持角色查询时保持旧行为
+    }
+}
+
+function injectTitleBarDom(role: 'main' | 'child'): void {
+    logger.info('Injecting custom title bar...', role);
     if (document.getElementById('custom-titlebar')) return;
 
     const isMac = process.platform === 'darwin';
+    const child = role === 'child';
+    const height = child ? 44 : 32;
+
+    const style = document.createElement('style');
+    style.id = 'custom-titlebar-style';
+    style.textContent = BAR_STYLE;
+    document.head.appendChild(style);
 
     const bar = document.createElement('div');
     bar.id = 'custom-titlebar';
     bar.style.cssText = `
-        height:32px;
+        height:${height}px;
         width:100vw;
         background:rgba(255,255,255,0)!important;
         backdrop-filter: blur(12px)!important;
@@ -23,122 +70,87 @@ function injectTitleBar(): void {
         left:0;
         z-index:99999;
         display:flex;
-        justify-content:flex-end;
+        justify-content:space-between;
         align-items:center;
         transition: background 0.3s ease;
     `;
 
-    // macOS 的按钮由系统窗口绘制，这里只保留透明拖动区域。
-    // 其他平台继续使用原来的自定义窗口控制按钮。
-    bar.innerHTML = isMac ? '' : `
-        <div id="titlebar-btns" style="-webkit-app-region:no-drag; display:flex; gap:2px; padding-right:4px;">
-            <button id="min-btn" style="
-                background:transparent; 
-                border:none; 
-                width:34px;
-                height:32px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                cursor:pointer;
-                border-radius:4px;
-                transition:all 0.2s ease;
-            ">
+    const buttons = `
+        <div id="titlebar-btns" style="-webkit-app-region:no-drag; display:flex; height:100%;">
+            <button id="min-btn" class="tb-btn" title="最小化">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path d="M2 8H14" stroke="#888" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M2 8H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
             </button>
-            <button id="max-btn" style="
-                background:transparent; 
-                border:none; 
-                width:34px;
-                height:32px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                cursor:pointer;
-                border-radius:4px;
-                transition:all 0.2s ease;
-            ">
+            <button id="max-btn" class="tb-btn" title="最大化">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="#888" stroke-width="1.5"/>
+                    <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
                 </svg>
             </button>
-            <button id="close-btn" style="
-                background:transparent; 
-                border:none; 
-                width:34px;
-                height:32px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                cursor:pointer;
-                border-radius:4px;
-                transition:all 0.2s ease;
-            ">
+            <button id="close-btn" class="tb-btn close" title="关闭">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                    <path d="M4 4L12 12M12 4L4 12" stroke="#888" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
             </button>
         </div>
     `;
 
-    // 添加body顶部内边距
+    // macOS 的窗口按钮由系统绘制，只保留透明拖动区域。
+    bar.innerHTML = isMac
+        ? ''
+        : child
+            ? `<div class="tb-left"><img class="tb-icon" alt=""><span class="tb-title"></span></div>${buttons}`
+            : `<div style="flex:1;height:100%;"></div>${buttons}`;
+
+    // 添加body顶部内边距；防止出现双重滚动条
     document.body.style.paddingTop = '10px';
-    // 防止出现双重滚动条
     document.documentElement.style.overflowY = 'hidden';
     document.body.appendChild(bar);
 
     if (isMac) return;
 
-    // 按钮交互效果
-    const buttonIds: string[] = ['min-btn', 'max-btn', 'close-btn'];
-    buttonIds.forEach((id: string) => {
-        const btn = document.getElementById(id) as HTMLButtonElement;
-        if (!btn) return;
-        
-        // 平滑的悬停效果
-        btn.addEventListener('mouseenter', () => {
-            if (id === 'close-btn') {
-                btn.style.background = 'rgba(232, 17, 35, 0.2)';
-                const pathElement = btn.querySelector('path') as SVGPathElement;
-                if (pathElement) pathElement.style.stroke = '#fff';
-            } else {
-                btn.style.background = 'rgba(0, 0, 0, 0.06)';
-                const svgElement = btn.querySelector('path, rect') as SVGElement;
-                if (svgElement) svgElement.style.stroke = '#fff';
-            }
-        });
-
-        btn.addEventListener('mouseleave', () => {
-            btn.style.background = 'transparent';
-            const svgElement = btn.querySelector('path, rect') as SVGElement;
-            if (svgElement) svgElement.style.stroke = '#888';
-        });
-    });
-
     // 窗口控制功能
-    const minBtn = document.getElementById('min-btn');
-    const maxBtn = document.getElementById('max-btn');
-    const closeBtn = document.getElementById('close-btn');
-
-    if (minBtn) {
-        minBtn.addEventListener('click', () => {
-            ipcRenderer.send('window-minimize');
+    const bind = (id: string, channel: string): void => {
+        document.getElementById(id)?.addEventListener('click', () => {
+            ipcRenderer.send(channel);
         });
-    }
+    };
+    bind('min-btn', 'window-minimize');
+    bind('max-btn', 'window-maximize');
+    bind('close-btn', 'window-close');
 
-    if (maxBtn) {
-        maxBtn.addEventListener('click', () => {
-            ipcRenderer.send('window-maximize');
-        });
-    }
+    if (!child) return;
 
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            ipcRenderer.send('window-close');
-        });
-    }
+    // —— 子窗口：标题/图标/主题色实时跟随页面 ——
+    const titleEl = bar.querySelector('.tb-title') as HTMLElement;
+    const iconEl = bar.querySelector('.tb-icon') as HTMLImageElement;
+
+    const syncTitle = (): void => {
+        titleEl.textContent = document.title || '';
+    };
+    const syncIcon = (): void => {
+        const href = currentFavicon();
+        if (href && iconEl.getAttribute('src') !== href) iconEl.setAttribute('src', href);
+    };
+    const syncTheme = (): void => {
+        bar.setAttribute('data-theme', detectDark() ? 'dark' : 'light');
+    };
+    syncTitle();
+    syncIcon();
+    syncTheme();
+
+    new MutationObserver(() => { syncTitle(); syncIcon(); })
+        .observe(document.head, { childList: true, subtree: true, attributes: true });
+    new MutationObserver(syncTheme)
+        .observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+}
+
+function injectTitleBar(): void {
+    if (document.getElementById('custom-titlebar')) return;
+    void getWindowRole().then((role) => {
+        if (document.body) injectTitleBarDom(role);
+        else document.addEventListener('DOMContentLoaded', () => injectTitleBarDom(role));
+    });
 }
 
 // 注册到 hook
