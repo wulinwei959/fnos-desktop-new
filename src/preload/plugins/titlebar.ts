@@ -131,6 +131,15 @@ function injectTitleBarDom(role: 'main' | 'child', maximized: boolean): void {
     bind('max-btn', 'window-maximize');
     bind('close-btn', 'window-close');
 
+    // 播放器页（/v/video/…）自带顶部标题行（返回键+片名），注入标题栏会与之重叠成双标题：
+    // 该路由下隐藏标题栏，退出播放后自动恢复。
+    const PLAYER_ROUTE = /^\/v\/video(\/|$)/;
+    const syncVisibility = (): void => {
+        bar.style.display = PLAYER_ROUTE.test(location.pathname) ? 'none' : 'flex';
+    };
+    syncVisibility();
+    setInterval(syncVisibility, 800);
+
     if (!child) return;
 
     // —— 子窗口：16px 圆角（对齐文件管理窗口），最大化时切回直角 ——
