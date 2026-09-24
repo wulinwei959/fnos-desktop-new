@@ -8,7 +8,7 @@ import { HookType, runHooks } from './core/hooks';
 import preloadLogger from './core/logger';
 
 const SEND_CHANNELS = new Set([
-    'login', 'native-login', 'exit-native-login',
+    'login', 'native-login',
     'delete-history-item', 'clear-history', 'get-config',
     'get-version', 'check-update', 'get-download-proxy',
     'set-download-proxy',

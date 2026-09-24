@@ -102,8 +102,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
         return;
     }
 
-    // 二次验证（原生登录页）方式：管理端会话由其 cookie/"保持登录"维持，直接进桌面；
-    // 会话失效时 SPA 会跳 /login，被拦截回自定义登录页重新选择方式。
+    // 原生登录会话由管理端 cookie/"保持登录"维持；会话失效时 SPA 自行跳原生 /login 页。
     if (savedConfig.nativeLogin) {
         log.info('恢复原生登录会话（管理端 cookie 维持），直接跳转到桌面');
         mainWindow.loadURL(resolveHomeUrl(savedConfig.domain));
@@ -111,8 +110,8 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     }
 
     if (!savedConfig.token) {
-        log.warn('没有找到已保存的 token，无法恢复 cookie');
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        log.warn('没有找到已保存的 token，直接进入原生登录页');
+        mainWindow.loadURL(`${savedConfig.domain}/login`);
         return;
     }
 
@@ -137,7 +136,7 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
         } catch (error) {
             const reason = error instanceof AccessCodeVerificationError ? error.reason : 'network';
             log.warn('恢复访问码会话失败:', reason);
-            mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+            mainWindow.loadURL(`${savedConfig.domain}/login`);
             return;
         }
     }
@@ -153,12 +152,12 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
             return;
         }
 
-        // cookie 恢复失败，跳转到登录页面
-        log.warn('Cookie 恢复失败，跳转到登录页面');
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        // cookie 恢复失败，跳转到飞牛原生登录页
+        log.warn('Cookie 恢复失败，跳转到原生登录页');
+        mainWindow.loadURL(`${savedConfig.domain}/login`);
     }).catch((error) => {
-        // 出现异常，也跳转到登录页面
+        // 出现异常，也跳转到原生登录页
         log.error('Cookie 恢复过程中出现异常:', error);
-        mainWindow.loadFile(path.join(__dirname, '../../../resource/login/index.html'));
+        mainWindow.loadURL(`${savedConfig.domain}/login`);
     });
 }

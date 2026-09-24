@@ -9,7 +9,6 @@ import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
 import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
-import { setNativeLoginActive } from './login';
 import { currentPartition } from '../../common/partition';
 import {
     AccessCodeVerificationError,
@@ -246,18 +245,9 @@ async function handleLogin(
     }
 }
 
-// 原生登录（二次验证）：把整个登录流程交给飞牛管理端原生 /login 页（支持动态口令与"保持登录"）。
-// 管理端登录成功会写入会话 cookie ost；若媒体 token（Trim-MC-token）也已就绪则一并回写 config，
-// 否则以 nativeLogin 标记会话由管理端 cookie 维持（重启后管理端凭"保持登录"自动恢复）。
-let nativeLoginTimer: NodeJS.Timeout | null = null;
-
-function stopNativeLoginWatch(): void {
-    if (nativeLoginTimer) {
-        clearInterval(nativeLoginTimer);
-        nativeLoginTimer = null;
-    }
-    setNativeLoginActive(false);
-}
+// ===== 原生登录（默认登录面）=====
+// 登录一律在飞牛管理端原生 /login 页完成（支持账号密码/动态码/保持登录）。
+// 壳内职责只有两件：把窗口开到正确的原生登录页；检测到登录完成后持久化会话 cookie。
 
 /**
  * 管理端登录写入的 ost/osrt 默认是会话 cookie，Electron 退出即清空。
@@ -291,77 +281,90 @@ async function handleNativeLogin(event: IpcMainEvent, data?: { domain?: string; 
     if (!data || !domain || isFnId(domain) || !mainWindow) {
         event.reply('login-error', {
             title: '无法打开原生登录页',
-            message: '请输入有效的 IP 地址或域名（FN ID 无需二次验证，请用账号密码方式登录）。',
+            message: '请输入有效的 IP 地址或域名（FN ID 请用账号密码方式登录）。',
         });
         return;
     }
 
     const server = data.useHttps ? `https://${domain}` : `http://${domain}`;
-    const useHttps = !!data.useHttps;
-    log.info('[原生登录] 跳转到管理端原生登录页（含二次验证）:', server);
+    log.info('[原生登录] 跳转到管理端原生登录页:', server);
 
     // 清掉旧 cookie，确保原生页展示登录表单而不是自动进入桌面
     const ses = session.fromPartition(currentPartition());
     await ses.clearStorageData({ storages: ['cookies'] });
-
-    setNativeLoginActive(true);
     mainWindow.loadURL(`${server}/login`);
-
-    if (nativeLoginTimer) clearInterval(nativeLoginTimer);
-    const deadline = Date.now() + 10 * 60 * 1000;
-    nativeLoginTimer = setInterval(async () => {
-        try {
-            if (Date.now() > deadline) {
-                stopNativeLoginWatch();
-                log.warn('[原生登录] 超时未完成，恢复自定义登录拦截');
-                return;
-            }
-            const sessionCookies = await ses.cookies.get({ url: server, name: 'ost' });
-            if (sessionCookies.length === 0) return;
-
-            // 管理端登录完成。顺带尝试捕获媒体 token（影视应用 SSO 时写入），能拿到就一起回写
-            let account = '';
-            let token = '';
-            const mediaCookies = await ses.cookies.get({ url: server, name: 'Trim-MC-token' });
-            const mediaToken = mediaCookies[0]?.value;
-            if (mediaToken) {
-                const fnapi = new fn.ApiService(server, mediaToken);
-                const info = await fnapi.getUserInfo(5000, 0);
-                if (info && info.success) {
-                    token = mediaToken;
-                    account = info.data?.username || '';
-                }
-            }
-
-            fnConfig.saveConfig({ account, domain: server, token, useHttps, nativeLogin: true });
-            fnConfig.addHistory({ domain, account, password: '', useHttps });
-            await persistSessionCookies(ses, server);
-            stopNativeLoginWatch();
-            log.info('[原生登录] 登录完成，进入桌面（媒体 token:', token ? '已回写' : '待影视应用 SSO', ')');
-            mainWindow.loadURL(resolveHomeUrl(server));
-        } catch (error) {
-            log.error('[原生登录] 轮询登录状态失败:', error);
-        }
-    }, 1000);
 }
 
-// 注册认证相关处理器
-// 从原生登录页返回自定义登录页：停止轮询、恢复拦截、加载应用登录页
-function handleExitNativeLogin(event: IpcMainEvent): void {
+// 原生登录页顶栏注入的"服务器地址"框回车切换：记住地址并重载新服务器的登录页
+function handleSwitchServer(event: IpcMainEvent, data?: { domain?: string; useHttps?: boolean }): void {
+    const domain = data?.domain?.trim();
     const mainWindow = getMainWindow();
+    if (!mainWindow || !domain || isFnId(domain)) return;
     if (event.sender !== mainWindow.webContents) return;
-    stopNativeLoginWatch();
-    log.info('[原生登录] 用户返回应用登录页');
-    mainWindow.loadFile(path.join(__dirname, '../../../../resource/login/index.html'));
+    const useHttps = !!data?.useHttps;
+    const server = useHttps ? `https://${domain}` : `http://${domain}`;
+    let currentOrigin = '';
+    try {
+        currentOrigin = new URL(mainWindow.webContents.getURL()).origin;
+    } catch { /* 无效当前 URL 时直接切换 */ }
+    if (server === currentOrigin) return;
+    log.info('[服务器切换] 加载新服务器登录页:', server);
+    const cfg = fnConfig.readConfig() || {};
+    fnConfig.saveConfig({
+        account: cfg.account || '',
+        domain: server,
+        token: '',
+        useHttps,
+        nativeLogin: false,
+    });
+    mainWindow.loadURL(`${server}/login`);
+}
+
+let loginSettleTimer: NodeJS.Timeout | null = null;
+
+/**
+ * 常驻"登录完成"侦测：主窗已离开 /login 且存在会话态 ost cookie 时，
+ * 续期全部会话 cookie 并回写 config（nativeLogin），重启后免登录直进桌面。
+ * 原生 SPA 登录成功后自行跳转桌面，这里只负责会话落地，幂等可重复执行。
+ */
+function startLoginSettleWatch(): void {
+    if (loginSettleTimer) return;
+    loginSettleTimer = setInterval(async () => {
+        try {
+            const win = getMainWindow();
+            if (!win) return;
+            const url = win.webContents.getURL();
+            if (!/^https?:/i.test(url)) return;
+            const parsed = new URL(url);
+            if (/^\/(v\/)?login/.test(parsed.pathname)) return;
+            const ses = session.fromPartition(currentPartition());
+            const ost = await ses.cookies.get({ url, name: 'ost' });
+            if (!ost.length || ost[0].expirationDate) return; // 未登录或已持久化
+            const server = parsed.origin;
+            await persistSessionCookies(ses, server);
+            const cfg = fnConfig.readConfig() || {};
+            fnConfig.saveConfig({
+                account: cfg.account || '',
+                domain: server,
+                token: cfg.token || '',
+                useHttps: server.startsWith('https'),
+                nativeLogin: true,
+            });
+            log.info('[原生登录] 检测到管理端登录会话，cookie 已续期 30 天');
+        } catch (error) {
+            log.warn('[原生登录] 会话侦测异常:', error);
+        }
+    }, 3000);
 }
 
 function init(): void {
+    startLoginSettleWatch();
     registerHandler('get-config', handleGetConfig);
     registerHandler('clear-history', handleClearHistory);
     registerHandler('delete-history-item', handleDeleteHistoryItem);
     registerHandler('login', handleLogin);
     registerHandler('native-login', handleNativeLogin);
-    registerHandler('exit-native-login', handleExitNativeLogin);
+    registerHandler('switch-server', handleSwitchServer);
 }
 
 export {

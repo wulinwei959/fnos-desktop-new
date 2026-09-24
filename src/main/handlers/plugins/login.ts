@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { OnBeforeRequestListenerDetails } from 'electron';
 import { getInstance as getInterceptor } from '../core/interceptor';
 import { readConfig, saveConfig } from '../../../modules/fn_config/config';
@@ -10,25 +9,9 @@ import { currentPartition } from '../../common/partition';
 
 /**
  * 登录拦截插件
- * 处理登录和登出请求的拦截
+ * 登录面已改为飞牛原生 /login 页，这里不再拦登录路由；
+ * 仅保留登出拦截：清掉本地会话后把窗口带回原生登录页。
  */
-
-/**
- * 原生登录放行开关：
- * 二次验证（2FA）走飞牛原生 /v/login 页时，需要临时放行 login-interceptor，
- * 否则原生登录页会被本拦截器再次拉回自定义登录页，形成死循环。
- * 由 auth.ts 的 native-login 流程在跳转前置 true、登录完成或失败后置 false。
- */
-let nativeLoginActive = false;
-
-function setNativeLoginActive(active: boolean): void {
-    nativeLoginActive = active;
-    log.info('[原生登录] 拦截器放行状态:', active);
-}
-
-function isNativeLoginActive(): boolean {
-    return nativeLoginActive;
-}
 
 /**
  * 清空登录信息和Cookie
@@ -45,7 +28,8 @@ function clearLoginCookies(): void {
             account: config.account || '',
             domain: config.domain || '',
             token: '',
-            useHttps: config.useHttps
+            useHttps: config.useHttps,
+            nativeLogin: false,
         });
         log.info('已清空配置中的登录token');
     }
@@ -62,54 +46,16 @@ function clearLoginCookies(): void {
 }
 
 /**
- * 处理登录请求拦截
- * @param details - 请求详情
- * @param callback - 回调函数
- */
-function handleLoginRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
-    // 原生 2FA 登录进行中：放行，不拉回自定义页
-    if (nativeLoginActive) {
-        callback({});
-        return;
-    }
-
-    log.info('检测到登录请求，清空登录信息并跳转到登录页面');
-    
-    // 清空配置cookie
-    clearLoginCookies();
-    
-    // 取消请求
-    callback({ cancel: true });
-    
-    // 加载自定义页面
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-        mainWindow.loadFile(path.join(__dirname, '../../../../resource/login/index.html'));
-    } else {
-        log.error('主窗口未创建，无法跳转到登录页面');
-    }
-}
-
-/**
- * 处理登出请求拦截
- * @param details - 请求详情
- * @param callback - 回调函数
+ * 处理登出请求拦截：放行登出请求本身，随后把窗口带回原生登录页
  */
 function handleLogoutRequest(details: OnBeforeRequestListenerDetails, callback: (response: { cancel?: boolean }) => void): void {
-    log.info('检测到登出请求，清空登录信息并跳转到登录页面');
-    
-    // 清空配置cookie
+    log.info('检测到登出请求，清空登录信息并回到原生登录页');
     clearLoginCookies();
-    
-    // 取消请求
-    callback({ cancel: true });
-    
-    // 加载自定义页面
+    callback({});
     const mainWindow = getMainWindow();
-    if (mainWindow) {
-        mainWindow.loadFile(path.join(__dirname, '../../../../resource/login/index.html'));
-    } else {
-        log.error('主窗口未创建，无法跳转到登录页面');
+    const domain = (readConfig() || {}).domain;
+    if (mainWindow && domain) {
+        mainWindow.loadURL(`${domain}/login`);
     }
 }
 
@@ -118,23 +64,6 @@ function handleLogoutRequest(details: OnBeforeRequestListenerDetails, callback: 
  */
 function init(): void {
     const interceptorManager = getInterceptor();
-
-    // 注册登录请求拦截器
-    interceptorManager.registerBeforeRequest(
-        {
-            urls: [
-                'http://*/v/login',
-                'https://*/v/login',
-                'http://*/v/welcome',
-                'https://*/v/welcome',
-                // fnOS 管理端会话过期会跳根路径 /login（不带 /v），同样拉回自定义登录页
-                'http://*/login',
-                'https://*/login',
-            ]
-        },
-        handleLoginRequest,
-        'login-interceptor'
-    );
 
     // 注册登出请求拦截器
     interceptorManager.registerBeforeRequest(
@@ -153,6 +82,4 @@ function init(): void {
 
 export {
     init,
-    setNativeLoginActive,
-    isNativeLoginActive,
 };
