@@ -5,6 +5,7 @@ import { restoreCookies } from '../../modules/fn_config/cookie';
 import { BrowserWindow, dialog } from 'electron';
 import { AccessCodeVerificationError, establishAccessCodeSession } from './accessCodeSession';
 import { applyVerifiedOriginToFnConnectBaseUrl } from '../handlers/core/fnConnect';
+import { resolveHomeUrl } from './systemPage';
 
 /**
  * 设置窗口为半屏
@@ -133,8 +134,8 @@ export async function setupCookieRestore(mainWindow: BrowserWindow): Promise<voi
     // 恢复 cookie
     await restoreCookies(savedConfig.domain, savedConfig.token).then((result) => {
         if (result === true) {
-            // cookie 恢复成功，跳转到主页面
-            mainWindow.loadURL(`${savedConfig.domain}/v`);
+            // cookie 恢复成功，跳转到主页面（原生飞牛 OS 桌面）
+            mainWindow.loadURL(resolveHomeUrl(savedConfig.domain));
             return;
         }
 

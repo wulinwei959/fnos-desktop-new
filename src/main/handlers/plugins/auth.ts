@@ -1,5 +1,6 @@
 import { IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
+import { resolveHomeUrl } from '../../common/systemPage';
 import * as fn from '../../../modules/fn_api/api';
 import { restoreCookies } from '../../../modules/fn_config/cookie';
 import * as fnConfig from '../../../modules/fn_config/config';
@@ -207,10 +208,10 @@ async function handleLogin(
         // 跳转到主页
         const mainWindow = getMainWindow();
         if (mainWindow) {
-            log.info('恢复登录状态，即将跳转到主页面, domain:', server);
+            log.info('恢复登录状态，即将跳转到主页面（原生桌面）, domain:', server);
             const success = await restoreCookies(server, token, true);
             if (success) {
-                mainWindow.loadURL(`${server}/v`);
+                mainWindow.loadURL(resolveHomeUrl(server));
             } else {
                 event.reply('login-error', {
                     title: '登录失败',

@@ -1,5 +1,6 @@
 import { BrowserWindow, IpcMainEvent } from 'electron';
 import { getMainWindow } from '../../common/mainwin';
+import { resolveHomeUrl } from '../../common/systemPage';
 import { ApiService } from '../../../modules/fn_api/api';
 import { request, HttpMethod } from '../../../modules/fn_api/request';
 import { isTrusted } from '../../../modules/cert_trust';
@@ -377,8 +378,8 @@ export async function handleFnIdLogin(event: IpcMainEvent, loginData: LoginData)
                     });
 
                     const mainWindow = getMainWindow();
-                    log.info('[FN ID] 登录成功，跳转到主页面');
-                    await mainWindow.loadURL(`${resolvedTargetBaseUrl}/v`);
+                    log.info('[FN ID] 登录成功，跳转到主页面（原生桌面）');
+                    await mainWindow.loadURL(resolveHomeUrl(resolvedTargetBaseUrl));
 
                     clearTimeout(timeout);
                     resolve();

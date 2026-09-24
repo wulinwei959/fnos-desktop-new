@@ -62,9 +62,21 @@ export function exitSystemPage(win: BrowserWindow | null): void {
     win.loadURL(target).catch(e => log.error('[system-page] 返回影视失败:', e));
 }
 
-/** 依当前页面给出托盘菜单应显示的动作标签。 */
+/** 依当前页面给出托盘菜单应显示的动作标签。桌面为主窗口：在桌面→"打开飞牛影视"，在影视→"返回桌面"。 */
 export function systemPageToggleLabel(win: BrowserWindow | null): string {
-    return isOnVideoPage(win) ? '进入飞牛桌面' : '返回影视';
+    return isOnVideoPage(win) ? '返回桌面' : '打开飞牛影视';
+}
+
+/**
+ * 解析主窗口的"主页"落地地址。策略：原生飞牛 OS 桌面是主窗口，故默认落到 origin 根路径 `/`；
+ * 影视（fntv /v）是用户从桌面点开"飞牛影视"后才进入的。可用 systemPageUrl 覆盖。
+ * @param origin 服务器 origin（如 http://nas:5666 或带 /v 的旧值，会被归一到根）
+ */
+export function resolveHomeUrl(origin: string | null | undefined): string {
+    const custom = getSystemPageUrl();
+    if (custom) return custom;
+    const base = (origin || '').replace(/\/v\/?$/i, '').replace(/\/+$/, '');
+    return base ? base + '/' : '';
 }
 
 /** 执行一次"桌面/影视"切换（供托盘点击调用）。 */
