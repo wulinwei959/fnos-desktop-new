@@ -1021,6 +1021,11 @@
             box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
         }
 
+        .mode-tab.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         .native-hint {
             font-size: 12.5px;
             line-height: 1.6;
@@ -1044,21 +1049,6 @@
             margin-top: 6px;
             text-align: center;
         }
-
-        .native-fallback-btn {
-            width: 100%;
-            background: transparent;
-            border: none;
-            color: #5a626c;
-            font-size: 12.5px;
-            padding: 6px 0 2px;
-            cursor: pointer;
-            text-decoration: underline;
-        }
-
-        .native-fallback-btn:hover {
-            color: #0066ff;
-        }
     </style>
 </head>
 
@@ -1078,44 +1068,10 @@
             </div>
             <div id="domainError" class="error-msg" style="display:none;">请正确填写IPV4、IPV6、域名或 FN ID（6-30位，不含点号）</div>
         </div>
-        <div class="mode-tabs" id="modeTabs">
-            <button type="button" class="mode-tab active" data-mode="custom">账号密码</button>
-            <button type="button" class="mode-tab" data-mode="native">二次验证</button>
-        </div>
-        <div id="customModeFields">
-        <div class="form-group">
-            <label for="username">用户名</label>
-            <input type="text" id="username" placeholder="请输入用户名" spellcheck="false" tabindex="2" />
-        </div>
-        <div class="form-group has-button">
-            <label for="password">密码</label>
-            <input type="password" id="password" placeholder="请输入密码" spellcheck="false" tabindex="3" />
-            <button type="button" class="password-toggle" id="passwordToggle" title="显示/隐藏密码"><img id="passwordToggleImg" width="20px" src="./image/password-show.png" alt="显示密码" /></button>
-        </div>
         <div class="form-group has-button">
             <label for="accessCode">访问码（可选）</label>
-            <input type="password" id="accessCode" placeholder="服务器未启用访问码时请留空" spellcheck="false" autocomplete="off" tabindex="4" />
+            <input type="password" id="accessCode" placeholder="服务器未启用访问码时请留空" spellcheck="false" autocomplete="off" tabindex="2" />
             <button type="button" class="password-toggle" id="accessCodeToggle" title="显示访问码"><img id="accessCodeToggleImg" width="20px" src="./image/password-show.png" alt="显示访问码" /></button>
-        </div>
-        </div>
-        <div id="twofaFields" style="display:none;">
-            <div class="native-hint">
-                账号已开启二次验证时使用：输入账号密码后，再输入验证器 App 的 6 位动态码完成登录。
-            </div>
-            <div class="form-group">
-                <label for="twofaUsername">用户名</label>
-                <input type="text" id="twofaUsername" placeholder="请输入用户名" spellcheck="false" autocomplete="off" />
-            </div>
-            <div class="form-group has-button">
-                <label for="twofaPassword">密码</label>
-                <input type="password" id="twofaPassword" placeholder="请输入密码" spellcheck="false" autocomplete="off" />
-                <button type="button" class="password-toggle" id="twofaPasswordToggle" title="显示/隐藏密码"><img id="twofaPasswordToggleImg" width="20px" src="./image/password-show.png" alt="显示密码" /></button>
-            </div>
-            <div class="form-group" id="twofaCodeGroup" style="display:none;">
-                <label for="twofaCode">二次验证码</label>
-                <input type="text" id="twofaCode" maxlength="6" inputmode="numeric" placeholder="验证器 App 的 6 位动态码" spellcheck="false" autocomplete="off" />
-            </div>
-            <button type="button" class="native-fallback-btn" id="nativeFallbackBtn">动态码不可用？改用飞牛原生登录页</button>
         </div>
         <div class="switch-container">
             <label class="switch">
@@ -1123,6 +1079,24 @@
                 <span class="slider"></span>
             </label>
             <span class="switch-label">HTTPS安全访问</span>
+        </div>
+        <div class="mode-tabs" id="modeTabs">
+            <button type="button" class="mode-tab active" data-mode="custom">账号密码</button>
+            <button type="button" class="mode-tab" data-mode="twofa">二次验证</button>
+        </div>
+        <div id="twofaHint" class="native-hint" style="display:none;">
+            将直接前往飞牛官方登录页：账号、密码与二次动态码均在原生页内完成，登录成功后自动进入桌面。
+        </div>
+        <div id="customFields">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" placeholder="请输入用户名" spellcheck="false" tabindex="3" />
+            </div>
+            <div class="form-group has-button">
+                <label for="password">密码</label>
+                <input type="password" id="password" placeholder="请输入密码" spellcheck="false" tabindex="4" />
+                <button type="button" class="password-toggle" id="passwordToggle" title="显示/隐藏密码"><img id="passwordToggleImg" width="20px" src="./image/password-show.png" alt="显示密码" /></button>
+            </div>
         </div>
         <button class="login-btn" id="loginBtn" disabled>登录</button>
         
@@ -1201,83 +1175,39 @@
         const passwordToggleImg = document.getElementById('passwordToggleImg');
         const accessCodeInput = document.getElementById('accessCode');
 
-        // 登录方式：custom=账号密码(HTTP)；native=二次验证(自建 WS RPC 动态码流程)
+        // 登录方式（用户拍板终态）：
+        //   账号密码 = 保留原有 HTTP 媒体端登录链路（未开 2FA 的账号直接进桌面）
+        //   二次验证 = 跳飞牛原生 /login 页，壳内地址/账号/密码自动预填，用户只输动态码
         let loginMode = 'custom';
-        let twofaStage = 'credentials'; // credentials → code（等待动态码）
-        let twofaSessionId = '';
         const modeTabs = document.getElementById('modeTabs');
-        const customModeFields = document.getElementById('customModeFields');
-        const twofaFields = document.getElementById('twofaFields');
-        const twofaUsernameInput = document.getElementById('twofaUsername');
-        const twofaPasswordInput = document.getElementById('twofaPassword');
-        const twofaCodeGroup = document.getElementById('twofaCodeGroup');
-        const twofaCodeInput = document.getElementById('twofaCode');
-        const nativeFallbackBtn = document.getElementById('nativeFallbackBtn');
+        const twofaHint = document.getElementById('twofaHint');
+        const customFields = document.getElementById('customFields');
 
-        function resetTwofaStage() {
-            twofaStage = 'credentials';
-            twofaSessionId = '';
-            twofaCodeGroup.style.display = 'none';
+        function currentDomain() {
+            return domainInput.value.trim();
         }
 
-        function setTwofaCodeStage(sessionId) {
-            twofaStage = 'code';
-            twofaSessionId = sessionId;
-            twofaCodeGroup.style.display = '';
-            loginBtn.textContent = '验证并登录';
-            twofaCodeInput.focus();
+        function syncModeUi() {
+            const fnid = isFnId(currentDomain());
+            // FN ID 无原生页可跳，强制回账号密码方式
+            if (fnid && loginMode === 'twofa') loginMode = 'custom';
+            Array.from(modeTabs.querySelectorAll('.mode-tab')).forEach(function (t) {
+                const disabled = fnid && t.dataset.mode === 'twofa';
+                t.classList.toggle('active', t.dataset.mode === loginMode);
+                t.classList.toggle('disabled', disabled);
+                t.title = disabled ? 'FN ID 登录请使用账号密码方式' : '';
+            });
+            const twofa = loginMode === 'twofa';
+            twofaHint.style.display = twofa ? '' : 'none';
+            customFields.style.display = twofa ? 'none' : '';
+            loginBtn.textContent = twofa ? '前往 fnOS 登录页' : '登录';
         }
 
         modeTabs.addEventListener('click', function (e) {
             const tab = e.target.closest('.mode-tab');
-            if (!tab || tab.dataset.mode === loginMode) return;
+            if (!tab || tab.classList.contains('disabled') || tab.dataset.mode === loginMode) return;
             loginMode = tab.dataset.mode;
-            resetTwofaStage();
-            Array.from(modeTabs.querySelectorAll('.mode-tab')).forEach(function (t) {
-                t.classList.toggle('active', t === tab);
-            });
-            customModeFields.style.display = loginMode === 'custom' ? '' : 'none';
-            twofaFields.style.display = loginMode === 'native' ? '' : 'none';
-            loginBtn.textContent = '登录';
-            checkInputs();
-        });
-
-        // 二次验证密码显隐
-        const twofaPasswordToggle = document.getElementById('twofaPasswordToggle');
-        const twofaPasswordToggleImg = document.getElementById('twofaPasswordToggleImg');
-        twofaPasswordToggle.addEventListener('click', function () {
-            if (twofaPasswordInput.type === 'password') {
-                twofaPasswordInput.type = 'text';
-                twofaPasswordToggleImg.src = './image/password-hide.png';
-            } else {
-                twofaPasswordInput.type = 'password';
-                twofaPasswordToggleImg.src = './image/password-show.png';
-            }
-        });
-
-        // 兜底：跳飞牛原生登录页（管理端 /login，原生自带 2FA 步骤）
-        nativeFallbackBtn.addEventListener('click', function () {
-            const domain = domainInput.value.trim();
-            if (!domain || !isValidDomainOrIP(domain) || isFnId(domain)) return;
-            loginBtn.disabled = true;
-            ipcRenderer.send('native-login', { domain, useHttps: document.getElementById('httpsSwitch').checked });
-            setTimeout(checkInputs, 5000);
-        });
-
-        // 2FA 流程结果统一处理
-        ipcRenderer.on('login-2fa-result', function (event, data) {
-            if (!data) return;
-            if (data.kind === '2fa') {
-                setTwofaCodeStage(data.sessionId);
-                return;
-            }
-            if (data.kind === 'ok') {
-                showCustomMessage('success', '登录成功', '正在进入桌面…');
-                return;
-            }
-            resetTwofaStage();
-            loginBtn.textContent = '登录';
-            showCustomMessage('error', '二次验证登录失败', data.message || '未知错误');
+            syncModeUi();
             checkInputs();
         });
         const accessCodeToggle = document.getElementById('accessCodeToggle');
@@ -1449,20 +1379,11 @@
         }
 
         function checkInputs() {
-            const domain = domainInput.value.trim();
-            const domainError = document.getElementById('domainError');
-            let valid;
-            if (loginMode === 'native') {
-                if (twofaStage === 'code') {
-                    valid = /^\d{6}$/.test(twofaCodeInput.value.trim());
-                } else {
-                    valid = Boolean(domain && isValidDomainOrIP(domain) && !isFnId(domain)
-                        && twofaUsernameInput.value.trim() && twofaPasswordInput.value);
-                }
-            } else {
-                const username = usernameInput.value.trim();
-                const password = passwordInput.value.trim();
-                valid = domain && isValidDomainOrIP(domain) && username && password;
+            syncModeUi();
+            const domain = currentDomain();
+            let valid = Boolean(domain) && isValidDomainOrIP(domain);
+            if (loginMode === 'custom') {
+                valid = valid && Boolean(usernameInput.value.trim() && passwordInput.value);
             }
             loginBtn.disabled = !valid;
             loginBtn.classList.toggle('enabled', Boolean(valid));
@@ -1485,66 +1406,47 @@
             applyServerTheme(domainInput.value.trim(), this.checked);
         });
 
-        domainInput.addEventListener('input', checkInputs);
+        domainInput.addEventListener('input', function () {
+            syncModeUi();
+            checkInputs();
+        });
         usernameInput.addEventListener('input', checkInputs);
         passwordInput.addEventListener('input', checkInputs);
-        twofaUsernameInput.addEventListener('input', checkInputs);
-        twofaPasswordInput.addEventListener('input', checkInputs);
-        twofaCodeInput.addEventListener('input', checkInputs);
 
-        // 登录逻辑
+        // 登录逻辑：二次验证方式→原生登录页（带账号密码预填）；其余→现有账号密码链路
         loginBtn.addEventListener('click', function () {
             if (loginBtn.disabled) return;
 
-            // 二次验证模式：两步走（账号密码 → 6 位动态码），走主进程 WS RPC
-            if (loginMode === 'native') {
-                const domain = domainInput.value.trim();
-                const useHttps = document.getElementById('httpsSwitch').checked;
-                loginBtn.textContent = twofaStage === 'code' ? '验证中...' : '登录中...';
-                loginBtn.disabled = true;
-                loginBtn.classList.remove('enabled');
-                if (twofaStage === 'code') {
-                    ipcRenderer.send('login-2fa-verify', {
-                        sessionId: twofaSessionId,
-                        code: twofaCodeInput.value.trim(),
-                    });
-                } else {
-                    ipcRenderer.send('login-2fa-start', {
-                        domain: domain,
-                        useHttps: useHttps,
-                        username: twofaUsernameInput.value.trim(),
-                        password: twofaPasswordInput.value,
-                        stay: false,
-                    });
-                }
-                setTimeout(function () {
-                    loginBtn.textContent = '登录';
-                    checkInputs();
-                }, 15000);
-                return;
-            }
-            
-            // 设置登录中状态
             const originalText = loginBtn.textContent;
             loginBtn.textContent = '登录中...';
             loginBtn.disabled = true;
             loginBtn.classList.remove('enabled');
-            
-            const domain = domainInput.value.trim();
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value.trim();
-            const accessCode = accessCodeInput.value.trim();
+
+            const domain = currentDomain();
             const useHttps = document.getElementById('httpsSwitch').checked;
 
-            window.log.info('提交登录请求:', { useHttps });
-            
+            if (loginMode === 'twofa') {
+                ipcRenderer.send('native-login', {
+                    domain: domain,
+                    useHttps: useHttps,
+                });
+                setTimeout(function () {
+                    loginBtn.textContent = originalText;
+                    syncModeUi();
+                    checkInputs();
+                }, 5000);
+                return;
+            }
+
             const loginData = {
                 domain: domain,
-                username: username,
-                password: password,
-                accessCode: accessCode,
+                username: usernameInput.value.trim(),
+                password: passwordInput.value,
+                accessCode: accessCodeInput.value.trim(),
                 useHttps: useHttps
             };
+
+            window.log.info('提交登录请求:', { useHttps });
 
             // 发送登录请求
             ipcRenderer.send('login', loginData);
