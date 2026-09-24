@@ -92,12 +92,14 @@ if (!gotTheLock) {
             // 恢复 Cookie
             await winctrl.setupCookieRestore(mainWindow);
 
-            // 延迟3秒后进行自动更新检查，避免影响应用启动速度
-            setTimeout(() => {
-                getUpdateChecker().autoCheckForUpdates().catch((error: Error) => {
-                    log.error('启动时自动检查更新失败:', error);
-                });
-            }, 3000);
+            // TODO(更新源): 基座默认指向上游 QiaoKes/fntv-electron 的 GitHub Releases，
+            // 对本合并项目是错误来源（会弹"发现新版本 2.6.2"）。新仓库在 Gitea 且暂无 release，
+            // 先停用启动自动检查；接新发布源（Gitea releases API 或改指镜像仓库）后再启用。
+            // setTimeout(() => {
+            //     getUpdateChecker().autoCheckForUpdates().catch((error: Error) => {
+            //         log.error('启动时自动检查更新失败:', error);
+            //     });
+            // }, 3000);
         } catch (error) {
             log.error('应用启动失败:', error);
             app.quit();
