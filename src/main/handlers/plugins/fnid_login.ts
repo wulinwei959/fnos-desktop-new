@@ -38,10 +38,10 @@ export function isFnId(domain: string): boolean {
 
 /**
  * 构建 FN Connect URL
- * FN ID 归一化为 https://5ddd.com/{fnid}
+ * FN ID 归一化为官方解析域名 https://fnos.net/{fnid}（2026-09 实测：检测 FN ID 后重定向回源 NAS）。
  */
 function buildFnConnectUrl(fnId: string): string {
-    return `https://5ddd.com/${fnId.trim()}`;
+    return `https://fnos.net/${fnId.trim()}`;
 }
 
 /**
