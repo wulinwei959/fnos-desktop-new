@@ -6,17 +6,17 @@ const {
     isMpvPlaybackEnabled,
 } = require('../dest/modules/fn_config/playbackPreference.js');
 
-test('keeps the historical MPV default while rejecting malformed values', () => {
+test('默认走原生播放：仅显式 true 才启用 MPV 接管', () => {
     assert.equal(isMpvPlaybackEnabled(true), true);
     assert.equal(isMpvPlaybackEnabled(false), false);
-    assert.equal(isMpvPlaybackEnabled(undefined), true);
+    assert.equal(isMpvPlaybackEnabled(undefined), false); // 默认原生
     assert.equal(isMpvPlaybackEnabled(null), false);
     assert.equal(isMpvPlaybackEnabled('true'), false);
     assert.equal(isMpvPlaybackEnabled(1), false);
     assert.equal(isMpvPlaybackEnabled({ value: true }), false);
 });
 
-test('preload timeout and login settings default to MPV playback', () => {
+test('preload 超时与登录页设置默认走原生播放', () => {
     const preloadPlayback = fs.readFileSync(
         path.join(__dirname, '..', 'dest', 'preload', 'core', 'playback.js'),
         'utf8',
@@ -26,7 +26,10 @@ test('preload timeout and login settings default to MPV playback', () => {
         'utf8',
     );
 
-    assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: true \}\)/);
-    assert.match(loginPage, /id="hideOriginalPlayButtonSwitch" checked/);
-    assert.match(loginPage, /data\.hideOriginalPlayButton !== false/);
+    // 超时兜底 = 原生（false）
+    assert.match(preloadPlayback, /resolve\(\{ hideOriginalPlayButton: false \}\)/);
+    // 登录页开关默认不勾选
+    assert.match(loginPage, /id="hideOriginalPlayButtonSwitch"(?!.*\bchecked\b)/);
+    // 回填逻辑：仅 === true 才勾上
+    assert.match(loginPage, /data\.hideOriginalPlayButton === true/);
 });

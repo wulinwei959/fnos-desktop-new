@@ -16,7 +16,7 @@ export function getPlayButtonConfig(): Promise<PlayButtonConfig> {
     configPromise = new Promise((resolve) => {
         const timeout = setTimeout(() => {
             ipcRenderer.off('play-button-config-info', handler);
-            resolve({ hideOriginalPlayButton: true });
+            resolve({ hideOriginalPlayButton: false });
         }, 2000);
 
         const handler = (_event: Electron.IpcRendererEvent, data?: Partial<PlayButtonConfig>) => {

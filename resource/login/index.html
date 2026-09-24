@@ -969,7 +969,7 @@
             <div class="proxy-switch-row">
                 <span>使用 MPV 播放</span>
                 <label class="proxy-switch">
-                    <input type="checkbox" id="hideOriginalPlayButtonSwitch" checked>
+                    <input type="checkbox" id="hideOriginalPlayButtonSwitch">
                     <span class="proxy-slider"></span>
                 </label>
             </div>
@@ -1630,7 +1630,7 @@
         // 监听播放方式响应
         ipcRenderer.on('play-button-config-info', (event, data) => {
             if (data) {
-                hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton !== false;
+                hideOriginalPlayButtonSwitch.checked = data.hideOriginalPlayButton === true;
             }
         });
 
