@@ -15,7 +15,6 @@ import * as log from '../../modules/logger';
 
 const WS_PATH = '/websocket?type=main';
 const REQ_RSA_PUB = 'util.crypto.getRSAPub';
-const REQ_TOTP_VERIFY = 'appcgi.tfa.security.v1.login.totpVerify';
 const ERR_BAD_PASSWORD = 131072;
 const ERR_IP_BANNED = 131089;
 
@@ -133,11 +132,6 @@ class FnWsClient {
         return this.sendRequest(reqid, JSON.stringify({ req: 'encrypted', iv: b64(this.iv), rsa: this.rsaB64, aes }));
     }
 
-    /** 明文请求（appcgi 类，未设 HMAC 密钥前直发） */
-    rpcPlainMessage(params: Record<string, unknown>): Promise<any> {
-        return this.request(params);
-    }
-
     close(): void {
         try { this.ws?.close(); } catch { /* 忽略 */ }
         this.ws = null;
@@ -163,7 +157,7 @@ function buildLoginParams(server: { username: string; password: string; stay: bo
     const data: LoginData = {
         user: server.username,
         password: server.password,
-        stay: server.stay ? 1 : 0,
+        stay: server.stay ? 2 : 0,
         deviceType: 'desktop',
         deviceName: 'fnOS-Desktop',
         did: `electron-${Date.now()}`,
@@ -180,7 +174,8 @@ async function openConnectedClient(server: string): Promise<FnWsClient> {
 
 /**
  * 第一步：提交账号密码。
- * 返回 kind='ok'（未开 2FA，直接拿到 token）或 kind='2fa'（需动态码，返回会话句柄）。
+ * 响应字段在顶层（无 data 包装）。返回 kind='ok'（无需 2FA）或 kind='2fa'（需动态码）。
+ * 判定对齐 web 端：!isTwofaEnforced && !isBindTwofaSecret，或已绑定且受信任设备 → 直接完成。
  */
 export async function fnLoginStart(
     server: string,
@@ -192,22 +187,27 @@ export async function fnLoginStart(
     try {
         const resp = await client.rpcEncrypted(buildLoginParams({ username, password, stay }));
         if (resp?.result === 'fail' || (typeof resp?.errno === 'number' && resp.errno !== 0)) {
-            const message = describeErrno(Number(resp.errno) || -1);
+            const message = resp?.errmsg || describeErrno(Number(resp.errno) || -1);
             client.close();
             return { kind: 'error', message };
         }
-        const data = resp?.data || {};
-        if (data.accessToken) {
+        const skip2fa = (!resp.isTwofaEnforced && !resp.isBindTwofaSecret)
+            || (resp.isBindTwofaSecret && resp.isTrustedDevice);
+        if (!skip2fa && resp.accessToken) {
             return {
                 kind: '2fa',
-                session: { socket: client, server, username, stay, accessToken: String(data.accessToken), createdAt: Date.now() },
+                session: { socket: client, server, username, stay, accessToken: String(resp.accessToken), createdAt: Date.now() },
             };
         }
-        if (data.token) {
-            return { kind: 'ok', client, result: { kind: 'ok', token: data.token, longToken: data.longToken, secret: data.secret, uid: data.uid } };
+        if (resp.token) {
+            return {
+                kind: 'ok',
+                client,
+                result: { kind: 'ok', token: resp.token, longToken: resp.longToken, secret: resp.secret, uid: resp.uid },
+            };
         }
         client.close();
-        return { kind: 'error', message: '登录响应格式异常，请重试或改用"前往原生登录"' };
+        return { kind: 'error', message: `登录响应格式异常（result=${String(resp?.result)}），请改用"前往原生登录"` };
     } catch (error) {
         client.close();
         throw error;
@@ -215,33 +215,29 @@ export async function fnLoginStart(
 }
 
 /**
- * 第二步：提交 6 位动态码，完成 TOTP 验证换取登录 token。
+ * 第二步：提交 6 位动态码。对齐 web 端：直接走 user.2fa.loginVerify（加密通道），
+ * 成功返回 {ticket, token, longToken, secret, machineId, uid}。
  */
 export async function fnLoginTotp(session: Fn2faSession, code: string): Promise<Fn2faLoginResult> {
-    const verify = await session.socket.rpcPlainMessage({ req: REQ_TOTP_VERIFY, data: { code, accessToken: session.accessToken } });
-    if (verify?.result === 'fail' || (typeof verify?.errno === 'number' && verify.errno !== 0)) {
-        const errno = Number(verify.errno);
-        return { kind: 'error', message: errno === 135168 ? '验证码错误，请重新输入' : `动态码验证失败（错误码 ${errno || '-1'}）` };
-    }
-
-    const loginResp = await session.socket.rpcEncrypted({
+    const verify = await session.socket.rpcEncrypted({
         req: 'user.2fa.loginVerify',
-        accessToken: session.accessToken,
+        code,
         isTrustedDevice: false,
-        stay: session.stay ? 1 : 0,
+        accessToken: session.accessToken,
+        stay: session.stay ? 2 : 0,
         deviceType: 'desktop',
         deviceName: 'fnOS-Desktop',
         did: `electron-${Date.now()}`,
     });
-    if (loginResp?.result === 'fail' || (typeof loginResp?.errno === 'number' && loginResp.errno !== 0)) {
-        return { kind: 'error', message: `登录确认失败（错误码 ${Number(loginResp.errno) || -1}）` };
+    if (verify?.result === 'fail' || (typeof verify?.errno === 'number' && verify.errno !== 0)) {
+        const errno = Number(verify.errno);
+        return { kind: 'error', message: errno === 135168 ? '验证码错误，请重新输入' : (verify?.errmsg || `动态码验证失败（错误码 ${errno || -1}）`) };
     }
-    const data = loginResp?.data || {};
-    if (!data.token) {
-        log.warn('[2FA] loginVerify 无 token:', JSON.stringify(loginResp).slice(0, 200));
+    if (!verify?.token) {
+        log.warn('[2FA] loginVerify 无 token:', JSON.stringify(verify).slice(0, 200));
         return { kind: 'error', message: '登录确认响应缺少 token，请改用"前往原生登录"' };
     }
-    return { kind: 'ok', token: data.token, longToken: data.longToken, secret: data.secret, uid: data.uid };
+    return { kind: 'ok', token: verify.token, longToken: verify.longToken, secret: verify.secret, uid: verify.uid };
 }
 
 export function closeFn2faSession(session: Fn2faSession | null | undefined): void {
