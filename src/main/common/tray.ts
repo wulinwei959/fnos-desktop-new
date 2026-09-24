@@ -274,6 +274,19 @@ export async function createTray(mainWindowInstance: BrowserWindow): Promise<voi
     // 保存窗口引用
     mainWindow = mainWindowInstance;
 
+    // 页面在「影视 /v」与「原生桌面 /」间切换时，刷新托盘里"进入飞牛桌面 / 返回影视"标签。
+    // 启动瞬间窗口常还停在登录页，标签会误算成"返回影视"；导航到 /v 后需据此重建菜单。
+    let _lastToggleLabel = '';
+    const refreshToggleLabel = () => {
+        const label = systemPageToggleLabel(mainWindow);
+        if (label !== _lastToggleLabel) {
+            _lastToggleLabel = label;
+            void updateTrayMenu();
+        }
+    };
+    mainWindowInstance.webContents.on('did-navigate', refreshToggleLabel);
+    mainWindowInstance.webContents.on('did-navigate-in-page', refreshToggleLabel);
+
     // 根据平台选择合适的图标
     let iconPath: string;
     let icon: Electron.NativeImage;
