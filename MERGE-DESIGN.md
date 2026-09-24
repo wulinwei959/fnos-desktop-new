@@ -77,7 +77,7 @@ fnos-desktop-new/
 ├─ third_party/                 # mpv / proxy(Go 源码) / potplayer(运行时)
 ├─ resource/                   # login 页、docs、wiki
 ├─ tests/                       # node --test（基座 14 个 + 新增 partition/lock/downloads 用例）
-├─ scripts/ .github/workflows/  # Win x64 NSIS；CI（自托管 runner）；日志写仓库外
+├─ scripts/                     # mpv 环境装配等辅助脚本（Gitea 仅代码托管，不使用 Actions）
 ├─ tsconfig.json package.json
 └─ LICENSE (GPL-3.0)
 ```
@@ -153,7 +153,7 @@ fnos-desktop-new/
 - **P3 直播 + Fntv-Plus 增强**：`live.ts`(EPG/录制)；搬 glassUI/danmaku/potplayer/同步/smartSkip；评估 embyWall。
 - **P4 打磨/可选**：秒开握手、热补丁（谨慎）、凭据加密收口、i18n/无障碍。
 
-每阶段遵循既有两段式流程：**本机 Docker/Win11 实机跑通验证 → 推自托管 CI(Gitea runner) 复跑并发布**；构建日志写仓库外；注释与提交用简体中文。
+每阶段遵循既有流程：**本机 Win11 实机跑通验证 → 提交并推送 Gitea（仅作代码托管，不启用 Actions runner）**；构建日志写仓库外；注释与提交用简体中文。
 
 ---
 
