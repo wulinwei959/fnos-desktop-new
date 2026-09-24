@@ -9,6 +9,7 @@ import {
     getSelectedSourceIndex,
     sendPlayEvent,
 } from '../core/playback';
+import { extractItemGuidFromUrl } from '../core/playTarget';
 
 const BTN_MARK = 'mpvPlayBtnAdded';
 
@@ -44,7 +45,9 @@ function injectOne(): void {
         mpvBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const itemGuid = findItemGuid(playBtn);
+            // 详情页优先用 URL 里的 guid（/v/movie/<guid>），避免命中祖先无关 data-id；
+            // 非详情页（卡片播放键）再回退到元素/链接推导。
+            const itemGuid = extractItemGuidFromUrl(location.href) || findItemGuid(playBtn);
             if (!itemGuid) {
                 console.warn('[mpvPlayButton] 未能识别播放项 guid');
                 return;
