@@ -45,6 +45,27 @@ export function getMainWindow(): BrowserWindow {
         // 导航 URL 日志：桌面优先策略下，排查落地/重定向（如 / 是否被重定向到 /v）很有用
         mainwin.webContents.on('did-navigate', (_e, url) => log.info('[导航] did-navigate →', url));
         mainwin.webContents.on('did-navigate-in-page', (_e, url) => log.info('[导航] in-page →', url));
+        // 桌面里通过 window.open 打开的应用窗口（如"飞牛影视"）不会自动继承主窗口的 preload，
+        // 必须显式补齐 webPreferences，否则播放按钮注入 / IPC 桥接全部失效。
+        // 注意：这里不指定 partition，子窗口继续共享打开者的会话（登录态不丢）。
+        mainwin.webContents.setWindowOpenHandler(() => ({
+            action: 'allow',
+            overrideBrowserWindowOptions: {
+                autoHideMenuBar: true,
+                frame: isMac,
+                minWidth: 800,
+                minHeight: 600,
+                icon: mainwinConfig.icon,
+                webPreferences: {
+                    webgl: true,
+                    preload: path.join(__dirname, '../../preload/index.js'),
+                    nodeIntegration: false,
+                    contextIsolation: true,
+                    sandbox: false,
+                    spellcheck: false,
+                },
+            },
+        }));
     }
     return mainwin;
 }
