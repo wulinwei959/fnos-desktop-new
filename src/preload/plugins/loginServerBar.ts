@@ -14,19 +14,18 @@ const BAR_ID = 'tb-server-switcher';
 function buildRow(currentOrigin: string): HTMLElement {
     const row = document.createElement('div');
     row.id = BAR_ID;
-    row.style.cssText = 'margin:0 0 14px;display:flex;flex-direction:column;gap:6px;';
-
-    const label = document.createElement('div');
-    label.textContent = '服务器地址（修改后回车切换）';
-    label.style.cssText = 'font-size:12px;opacity:.65;';
+    row.style.cssText = 'margin:0 0 20px;';
 
     const input = document.createElement('input');
     input.type = 'text';
     input.value = currentOrigin;
     input.spellcheck = false;
-    input.style.cssText = 'width:100%;padding:9px 12px;font-size:13px;border-radius:8px;'
-        + 'border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit;'
-        + 'outline:none;box-sizing:border-box;';
+    // 与原生"用户名/密码"输入框同款：白底、同圆角/高度/字号，保证视觉统一
+    input.style.cssText = 'width:100%;padding:15px 18px;font-size:15px;border-radius:12px;'
+        + 'border:none;background:#ffffff;color:#1f2329;outline:none;box-sizing:border-box;'
+        + 'font-family:inherit;';
+    input.placeholder = '服务器地址（修改后回车切换）';
+    input.addEventListener('focus', () => { input.select(); });
     input.addEventListener('keydown', (e: KeyboardEvent) => {
         if (e.key !== 'Enter') return;
         const raw = (input as HTMLInputElement).value.trim().replace(/\/+$/, '');
@@ -40,7 +39,6 @@ function buildRow(currentOrigin: string): HTMLElement {
         ipcRenderer.send('switch-server', { domain: u.host, useHttps: u.protocol === 'https:' });
     });
 
-    row.appendChild(label);
     row.appendChild(input);
     return row;
 }
