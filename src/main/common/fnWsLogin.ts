@@ -152,6 +152,7 @@ interface LoginData {
     deviceType: string;
     deviceName: string;
     did: string;
+    ver: number;
 }
 
 function buildLoginParams(server: { username: string; password: string; stay: boolean }): Record<string, unknown> {
@@ -162,6 +163,8 @@ function buildLoginParams(server: { username: string; password: string; stay: bo
         deviceType: 'desktop',
         deviceName: 'fnOS-Desktop',
         did: `electron-${Date.now()}`,
+        // ver:2＝新版管理端协议，服务端才会在响应里下发 ticket（换正式会话 cookie 用）
+        ver: 2,
     };
     return { req: 'user.login', ...data };
 }
@@ -229,6 +232,7 @@ export async function fnLoginTotp(session: Fn2faSession, code: string): Promise<
         deviceType: 'desktop',
         deviceName: 'fnOS-Desktop',
         did: `electron-${Date.now()}`,
+        ver: 2,
     });
     if (verify?.result === 'fail' || (typeof verify?.errno === 'number' && verify.errno !== 0)) {
         const errno = Number(verify.errno);
@@ -237,6 +241,9 @@ export async function fnLoginTotp(session: Fn2faSession, code: string): Promise<
     if (!verify?.token) {
         log.warn('[2FA] loginVerify 无 token:', JSON.stringify(verify).slice(0, 200));
         return { kind: 'error', message: '登录确认响应缺少 token，请改用"前往原生登录"' };
+    }
+    if (!verify.ticket) {
+        log.warn('[2FA] loginVerify 响应缺少 ticket, 字段:', Object.keys(verify).join(','));
     }
     return { kind: 'ok', token: verify.token, longToken: verify.longToken, secret: verify.secret, uid: verify.uid, ticket: verify.ticket };
 }
