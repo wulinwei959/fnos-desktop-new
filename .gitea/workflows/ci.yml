@@ -47,7 +47,7 @@ jobs:
         run: npm run compile
 
       - name: 运行单元测试
-        run: node --test tests/*.test.cjs
+        run: node --test --test-concurrency=1 tests/*.test.cjs
 
   # 说明：Windows 安装包构建（electron-builder --win）需一台带 windows 标签的
   # gitea-runner；当前仅有 Linux runner，故未启用。将来加了 Windows runner 再补该 job。

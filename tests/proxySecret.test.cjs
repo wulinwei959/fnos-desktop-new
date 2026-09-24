@@ -57,7 +57,12 @@ test('persisted secret authenticates an orphan proxy health probe', async (t) =>
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ service: 'fntv-proxy', protocol: 2 }));
     });
-    t.after(() => server.close());
+    t.after(async () => {
+        // 关键：close() 只停监听，不会断开已建立的 keep-alive 连接；
+        // 残留连接会让 node:test（尤其 Node 20）等句柄释放而永久挂起。先强断连接再等待关闭。
+        if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+    });
 
     await new Promise((resolve, reject) => {
         server.once('error', reject);
