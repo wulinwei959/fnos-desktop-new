@@ -1,6 +1,8 @@
 import { IpcMainEvent, session } from 'electron';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
+import * as http from 'http';
+import * as https from 'https';
 import { getMainWindow } from '../../common/mainwin';
 import { resolveHomeUrl } from '../../common/systemPage';
 import * as fn from '../../../modules/fn_api/api';
@@ -8,7 +10,7 @@ import { restoreCookies } from '../../../modules/fn_config/cookie';
 import * as fnConfig from '../../../modules/fn_config/config';
 import { registerHandler } from '../core/ipcHandler';
 import * as log from '../../../modules/logger';
-import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cert_trust';
+import { showCertificateTrustDialog, addTrustedHost, isTrusted } from '../../../modules/cert_trust';
 import { isFnId, handleFnIdLogin } from './fnid_login';
 import { setNativeLoginActive } from './login';
 import { currentPartition } from '../../common/partition';
@@ -369,12 +371,83 @@ function prunePending2fa(): void {
     }
 }
 
+/**
+ * 新版管理端登录态为"票据交换"：登录成功后需拿 ticket POST /app/ticket，
+ * 由服务端 Set-Cookie 写入 httpOnly 会话（ost 等）；只写 legacy fnos-token 不被识别。
+ * 走 node https（与 fn_api 请求层同策略：自签名主机由用户确认后放行），
+ * 再把 Set-Cookie 原样写回 Electron 会话。失败仅告警（legacy cookie 兼容旧版前端）。
+ */
+function postJsonOnce(url: string, body: string, headers: Record<string, string>): Promise<{ status: number; location?: string; setCookies: string[] }> {
+    return new Promise((resolve, reject) => {
+        const u = new URL(url);
+        const transport = u.protocol === 'https:' ? https : http;
+        const req = transport.request(
+            {
+                hostname: u.hostname,
+                port: u.port || (u.protocol === 'https:' ? 443 : 80),
+                path: u.pathname + u.search,
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...headers },
+                ...(u.protocol === 'https:' ? { rejectUnauthorized: !isTrusted(url) } : {}),
+            },
+            (res) => {
+                const chunks: Buffer[] = [];
+                res.on('data', (c: Buffer) => chunks.push(c));
+                res.on('end', () => resolve({
+                    status: res.statusCode || 0,
+                    location: res.headers.location,
+                    setCookies: (res.headers['set-cookie'] as string[] | undefined) || [],
+                }));
+            },
+        );
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+
+async function exchangeAdminTicket(ses: Electron.Session, server: string, ticket: string): Promise<boolean> {
+    try {
+        let url = `${server}/app/ticket`;
+        let resp = await postJsonOnce(url, JSON.stringify({ ticket }), {});
+        for (let hop = 0; hop < 2 && (resp.status === 301 || resp.status === 302) && resp.location; hop++) {
+            url = new URL(resp.location, url).toString();
+            resp = await postJsonOnce(url, JSON.stringify({ ticket }), {});
+        }
+        if (resp.status !== 200) {
+            log.warn('[2FA] ticket 交换会话失败, HTTP', resp.status);
+            return false;
+        }
+        for (const raw of resp.setCookies) {
+            const [pair, ...attrs] = raw.split(';');
+            const eq = pair.indexOf('=');
+            if (eq <= 0) continue;
+            const cookie: Electron.CookiesSetDetails = {
+                url,
+                name: pair.slice(0, eq).trim(),
+                value: pair.slice(eq + 1).trim(),
+                path: '/',
+                httpOnly: attrs.some(a => a.trim().toLowerCase() === 'httponly'),
+                secure: attrs.some(a => a.trim().toLowerCase() === 'secure'),
+            };
+            const sameSite = attrs.map(a => a.trim().toLowerCase()).find(a => a.startsWith('samesite='));
+            if (sameSite?.includes('none')) cookie.sameSite = 'no_restriction';
+            await ses.cookies.set(cookie);
+        }
+        log.info('[2FA] ticket 交换会话成功, cookie 数:', resp.setCookies.length);
+        return true;
+    } catch (error) {
+        log.warn('[2FA] ticket 交换会话异常:', error);
+        return false;
+    }
+}
+
 async function applyAdminLogin(
     server: string,
     useHttps: boolean,
     username: string,
     stay: boolean,
-    result: { token?: string; longToken?: string; secret?: string },
+    result: { token?: string; longToken?: string; secret?: string; ticket?: string },
 ): Promise<void> {
     const ses = session.fromPartition(currentPartition());
     const sameSite = useHttps ? 'no_restriction' : 'lax';
@@ -392,6 +465,9 @@ async function applyAdminLogin(
         });
     }
 
+    if (result.ticket) {
+        await exchangeAdminTicket(ses, server, result.ticket);
+    }
     fnConfig.saveConfig({ account: username, domain: server, token: '', useHttps, nativeLogin: true });
     fnConfig.addHistory({ domain: server.replace(/^https?:\/\//, ''), account: username, password: '', useHttps });
     await persistSessionCookies(ses, server);

@@ -25,6 +25,7 @@ export interface Fn2faLoginResult {
     longToken?: string;
     secret?: string;
     uid?: string;
+    ticket?: string;
     accessToken?: string;
 }
 
@@ -203,7 +204,7 @@ export async function fnLoginStart(
             return {
                 kind: 'ok',
                 client,
-                result: { kind: 'ok', token: resp.token, longToken: resp.longToken, secret: resp.secret, uid: resp.uid },
+                result: { kind: 'ok', token: resp.token, longToken: resp.longToken, secret: resp.secret, uid: resp.uid, ticket: resp.ticket },
             };
         }
         client.close();
@@ -237,7 +238,7 @@ export async function fnLoginTotp(session: Fn2faSession, code: string): Promise<
         log.warn('[2FA] loginVerify 无 token:', JSON.stringify(verify).slice(0, 200));
         return { kind: 'error', message: '登录确认响应缺少 token，请改用"前往原生登录"' };
     }
-    return { kind: 'ok', token: verify.token, longToken: verify.longToken, secret: verify.secret, uid: verify.uid };
+    return { kind: 'ok', token: verify.token, longToken: verify.longToken, secret: verify.secret, uid: verify.uid, ticket: verify.ticket };
 }
 
 export function closeFn2faSession(session: Fn2faSession | null | undefined): void {
