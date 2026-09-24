@@ -1,5 +1,4 @@
 import { IpcMainEvent, session } from 'electron';
-import { randomUUID } from 'crypto';
 import { getMainWindow } from '../../common/mainwin';
 import { resolveHomeUrl } from '../../common/systemPage';
 import * as fn from '../../../modules/fn_api/api';
@@ -11,13 +10,6 @@ import { showCertificateTrustDialog, addTrustedHost } from '../../../modules/cer
 import { isFnId, handleFnIdLogin } from './fnid_login';
 import { setNativeLoginActive } from './login';
 import { currentPartition } from '../../common/partition';
-import {
-    closeFn2faSession,
-    fnLoginStart,
-    fnLoginTotp,
-    type Fn2faLoginResult,
-    type Fn2faSession,
-} from '../../common/fnWsLogin';
 import {
     AccessCodeVerificationError,
     establishAccessCodeSession,
@@ -352,132 +344,6 @@ async function handleNativeLogin(event: IpcMainEvent, data?: { domain?: string; 
     }, 1000);
 }
 
-// ===== 自建二次验证（2FA）登录 =====
-// 会话有效期 5 分钟；登录成功后把管理端 token 写入 web 端约定的 cookie，
-// 并标记 nativeLogin 直接进桌面（媒体 token 由影视应用 SSO/ensureMediaToken 兜底）。
-const pending2fa = new Map<string, Fn2faSession>();
-const PENDING_2FA_TTL_MS = 5 * 60 * 1000;
-
-function prunePending2fa(): void {
-    const now = Date.now();
-    for (const [id, session0] of pending2fa) {
-        if (now - session0.createdAt > PENDING_2FA_TTL_MS) {
-            closeFn2faSession(session0);
-            pending2fa.delete(id);
-        }
-    }
-}
-
-async function applyAdminLogin(
-    server: string,
-    useHttps: boolean,
-    username: string,
-    stay: boolean,
-    result: { token?: string; longToken?: string; secret?: string },
-): Promise<void> {
-    const ses = session.fromPartition(currentPartition());
-    const sameSite = useHttps ? 'no_restriction' : 'lax';
-    if (result.token) {
-        await ses.cookies.set({
-            url: server, name: 'fnos-token', value: result.token,
-            path: '/', secure: useHttps, httpOnly: false, sameSite,
-        });
-    }
-    if (stay && result.longToken) {
-        await ses.cookies.set({
-            url: server, name: 'fnos-long-token', value: result.longToken,
-            path: '/', secure: useHttps, httpOnly: false, sameSite,
-            expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
-        });
-    }
-
-    fnConfig.saveConfig({ account: username, domain: server, token: '', useHttps, nativeLogin: true });
-    fnConfig.addHistory({ domain: server.replace(/^https?:\/\//, ''), account: username, password: '', useHttps });
-    await persistSessionCookies(ses, server);
-
-    const mainWindow = getMainWindow();
-    if (mainWindow) {
-        if (result.secret) {
-            // 管理端 SPA 后续 WS 请求需要 HMAC 密钥（web 端存 localStorage fnos-Secret）
-            mainWindow.webContents.once('did-finish-load', () => {
-                mainWindow.webContents.executeJavaScript(
-                    `try{localStorage.setItem('fnos-Secret', ${JSON.stringify(result.secret)})}catch(e){}`,
-                ).catch(() => { /* 忽略注入失败 */ });
-            });
-        }
-        mainWindow.loadURL(resolveHomeUrl(server));
-    }
-    log.info('[2FA] 登录完成并已应用会话, username:', username);
-}
-
-async function handleLogin2faStart(
-    event: IpcMainEvent,
-    data?: { domain?: string; useHttps?: boolean; username?: string; password?: string; stay?: boolean },
-): Promise<void> {
-    const domain = data?.domain?.trim();
-    const username = data?.username?.trim();
-    const password = data?.password;
-    if (!data || !domain || !username || !password || isFnId(domain)) {
-        event.reply('login-2fa-result', { kind: 'error', message: '请填写有效的服务器地址、用户名和密码' });
-        return;
-    }
-    const useHttps = !!data.useHttps;
-    const server = useHttps ? `https://${domain}` : `http://${domain}`;
-    try {
-        const started = await fnLoginStart(server, username, password, !!data.stay);
-        if (started.kind === 'error') {
-            event.reply('login-2fa-result', { kind: 'error', message: started.message });
-            return;
-        }
-        if (started.kind === 'ok') {
-            await applyAdminLogin(server, useHttps, username, !!data.stay, started.result);
-            event.reply('login-2fa-result', { kind: 'ok' });
-            return;
-        }
-        prunePending2fa();
-        const sessionId = randomUUID();
-        pending2fa.set(sessionId, started.session);
-        event.reply('login-2fa-result', { kind: '2fa', sessionId });
-    } catch (error) {
-        log.error('[2FA] 登录发起失败:', error);
-        event.reply('login-2fa-result', {
-            kind: 'error',
-            message: error instanceof Error ? error.message : '无法连接登录服务',
-        });
-    }
-}
-
-async function handleLogin2faVerify(
-    event: IpcMainEvent,
-    data?: { sessionId?: string; code?: string },
-): Promise<void> {
-    prunePending2fa();
-    const sessionId = data?.sessionId;
-    const code = data?.code?.trim();
-    const session0 = sessionId ? pending2fa.get(sessionId) : undefined;
-    if (!session0 || !code || !/^\d{6}$/.test(code)) {
-        event.reply('login-2fa-result', { kind: 'error', message: '请输入 6 位数字验证码（若已超时请重新登录）' });
-        return;
-    }
-    try {
-        const result: Fn2faLoginResult = await fnLoginTotp(session0, code);
-        if (result.kind !== 'ok') {
-            event.reply('login-2fa-result', { kind: 'error', message: result.message });
-            return;
-        }
-        pending2fa.delete(sessionId!);
-        closeFn2faSession(session0);
-        await applyAdminLogin(session0.server, session0.server.startsWith('https'), session0.username, session0.stay, result);
-        event.reply('login-2fa-result', { kind: 'ok' });
-    } catch (error) {
-        log.error('[2FA] 动态码验证失败:', error);
-        event.reply('login-2fa-result', {
-            kind: 'error',
-            message: error instanceof Error ? error.message : '动态码验证失败',
-        });
-    }
-}
-
 // 注册认证相关处理器
 function init(): void {
     registerHandler('get-config', handleGetConfig);
@@ -485,8 +351,6 @@ function init(): void {
     registerHandler('delete-history-item', handleDeleteHistoryItem);
     registerHandler('login', handleLogin);
     registerHandler('native-login', handleNativeLogin);
-    registerHandler('login-2fa-start', handleLogin2faStart);
-    registerHandler('login-2fa-verify', handleLogin2faVerify);
 }
 
 export {

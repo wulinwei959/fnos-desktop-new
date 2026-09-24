@@ -8,7 +8,7 @@ import { HookType, runHooks } from './core/hooks';
 import preloadLogger from './core/logger';
 
 const SEND_CHANNELS = new Set([
-    'login', 'native-login', 'login-2fa-start', 'login-2fa-verify',
+    'login', 'native-login',
     'delete-history-item', 'clear-history', 'get-config',
     'get-version', 'check-update', 'get-download-proxy',
     'set-download-proxy',
@@ -16,7 +16,7 @@ const SEND_CHANNELS = new Set([
 const RECEIVE_CHANNELS = new Set([
     'config-data', 'history-item-deleted', 'login-error', 'login-success',
     'version-info', 'update-status', 'download-proxy-info',
-    'download-proxy-set', 'login-2fa-result',
+    'download-proxy-set',
 ]);
 type PageListener = (...args: unknown[]) => void;
 const listenerWrappers = new Map<string, Map<PageListener, (...args: unknown[]) => void>>();
