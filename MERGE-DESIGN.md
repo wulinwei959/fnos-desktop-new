@@ -123,7 +123,7 @@ fnos-desktop-new/
 | system-page 模式 | mainwin | ✅ 搬 | 独立、小，直接给「通用外壳」打底 |
 | glassUI（玻璃/云母） | preload/plugins + settings | ✅ 搬 | 纯 CSS、`data-*` 门控，自包含 |
 | danmaku + proxy danmaku.go/headcache.go | modules/danmaku + Go | ✅ 搬 | 自包含，价值高 |
-| potplayer + potctl | players/impl + proxy/potctl | ✅ 搬 | 自包含（Windows WM_USER 协议） |
+| potplayer + potctl | players/impl + proxy/potctl | ⏸ 挂起 | 用户 2026-09-24 决定暂不做，先挂着；当前播放内核仅 MPV |
 | Douban/Trakt/Bangumi 同步 | handlers + fn_config | ✅ 搬 | 逻辑独立 |
 | smartSkip（theintrodb/AniSkip） | handlers + skip | ✅ 搬 | 依赖已有 proxy |
 | watchHistory / personTmdb / fnosAuth / libraryIndex / settings 细粒度 | handlers | ◑ 按需 | 价值中，随需要 |

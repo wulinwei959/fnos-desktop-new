@@ -33,6 +33,12 @@ export interface Config {
     exitMode?: 'direct' | 'minimize' | 'ask';
     /** 原生飞牛 OS 桌面地址（system-page 模式的"进入"目标）；留空=自动用当前 origin 根路径 */
     systemPageUrl?: string;
+    /** 开机/锁屏启动密码记录（scrypt 的 {salt,hash}，明文永不落盘） */
+    startupPassword?: { salt: string; hash: string };
+    /** 是否启用空闲自动锁 */
+    lockEnabled?: boolean;
+    /** 空闲多少分钟触发自动锁 */
+    idleLockMinutes?: number;
 }
 
 /**
@@ -399,6 +405,50 @@ export function setSystemPageUrl(url: string): void {
     writeConfig(config);
 }
 
+// ===== 锁屏 / 开机密码 =====
+// 启动密码是 scrypt 的 {salt,hash}（非明文），按普通字段存即可，无需 safeStorage 加密。
+export function hasStartupPassword(): boolean {
+    const c = readConfig() || {};
+    return !!(c.startupPassword && c.startupPassword.salt && c.startupPassword.hash);
+}
+
+export function getStartupPassword(): { salt: string; hash: string } | null {
+    const c = readConfig() || {};
+    return c.startupPassword && c.startupPassword.hash ? c.startupPassword : null;
+}
+
+export function setStartupPassword(record: { salt: string; hash: string } | null): void {
+    const config: Config = readConfig() || {};
+    if (record && record.hash) {
+        config.startupPassword = { salt: record.salt, hash: record.hash };
+    } else {
+        delete config.startupPassword;
+    }
+    writeConfig(config);
+}
+
+export function getLockEnabled(): boolean {
+    const c = readConfig() || {};
+    return c.lockEnabled === true;
+}
+
+export function setLockEnabled(enabled: boolean): void {
+    const config: Config = readConfig() || {};
+    config.lockEnabled = !!enabled;
+    writeConfig(config);
+}
+
+export function getIdleLockMinutes(): number {
+    const c = readConfig() || {};
+    return typeof c.idleLockMinutes === 'number' && c.idleLockMinutes > 0 ? c.idleLockMinutes : 0;
+}
+
+export function setIdleLockMinutes(minutes: number): void {
+    const config: Config = readConfig() || {};
+    config.idleLockMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes) : 0;
+    writeConfig(config);
+}
+
 // CommonJS导出，确保与现有代码兼容
 module.exports = {
     saveConfig,
@@ -426,5 +476,12 @@ module.exports = {
     getExitMode,
     setExitMode,
     getSystemPageUrl,
-    setSystemPageUrl
+    setSystemPageUrl,
+    hasStartupPassword,
+    getStartupPassword,
+    setStartupPassword,
+    getLockEnabled,
+    setLockEnabled,
+    getIdleLockMinutes,
+    setIdleLockMinutes
 };
