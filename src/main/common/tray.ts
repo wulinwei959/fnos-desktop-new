@@ -4,6 +4,7 @@ import { getInstance as getUpdateChecker } from '../../modules/updater/updateChe
 import { setMacCloseAction, getTrayNotificationShown, setTrayNotificationShown } from './preferences';
 import * as log from '../../modules/logger';
 import * as fnConfig from '../../modules/fn_config/config';
+import { toggleSystemPage, systemPageToggleLabel } from './systemPage';
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null; // 主窗口引用
@@ -127,6 +128,17 @@ async function updateTrayMenu(): Promise<void> {
 
     // 创建托盘菜单
     const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+        {
+            label: systemPageToggleLabel(mainWindow),
+            click: () => {
+                toggleSystemPage(mainWindow);
+                // 切换后刷新菜单，让标签在"进入飞牛桌面 / 返回影视"间更新
+                setTimeout(() => { void updateTrayMenu(); }, 800);
+            }
+        },
+        {
+            type: 'separator'
+        },
         {
             label: '设置',
             submenu: await createSettingsSubmenu(mainWindow)

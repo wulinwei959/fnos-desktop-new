@@ -31,6 +31,8 @@ export interface Config {
     mpvPlayerPath?: string;
     mpvVolume?: number;
     exitMode?: 'direct' | 'minimize' | 'ask';
+    /** 原生飞牛 OS 桌面地址（system-page 模式的"进入"目标）；留空=自动用当前 origin 根路径 */
+    systemPageUrl?: string;
 }
 
 /**
@@ -380,6 +382,23 @@ export function setExitMode(mode: 'direct' | 'minimize' | 'ask'): void {
     writeConfig(updatedConfig);
 }
 
+// 原生飞牛 OS 桌面地址（system-page 模式）
+export function getSystemPageUrl(): string {
+    const config = readConfig() || {};
+    return (config.systemPageUrl || '').trim();
+}
+
+export function setSystemPageUrl(url: string): void {
+    const config: Config = readConfig() || {};
+    const trimmed = (url || '').trim();
+    if (trimmed) {
+        config.systemPageUrl = trimmed;
+    } else {
+        delete config.systemPageUrl;
+    }
+    writeConfig(config);
+}
+
 // CommonJS导出，确保与现有代码兼容
 module.exports = {
     saveConfig,
@@ -405,5 +424,7 @@ module.exports = {
     getMpvVolume,
     setMpvVolume,
     getExitMode,
-    setExitMode
+    setExitMode,
+    getSystemPageUrl,
+    setSystemPageUrl
 };
