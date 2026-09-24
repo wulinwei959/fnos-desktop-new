@@ -1,5 +1,5 @@
 /**
- * 在影视页（/v）的原生播放按钮旁，注入一个独立的"用 MPV 播放"按钮。
+ * 在影视页（/v）的原生播放按钮旁，注入一个独立的"MPV 播放"按钮（样式继承原生按钮，保持一致）。
  * 合并版策略：默认走飞牛原生播放；MPV 改为此按钮按需选择（不再全局劫持播放键）。
  * 复用基座已验证的播放按钮识别与取流逻辑（findSemanticPlayButton / findItemGuid / sendPlayEvent）。
  */
@@ -39,9 +39,16 @@ function injectOne(): void {
 
         const mpvBtn = document.createElement('button');
         mpvBtn.type = 'button';
-        mpvBtn.textContent = '▶ 用 MPV 播放';
+        mpvBtn.textContent = 'MPV 播放';
         mpvBtn.dataset.customPlay = 'true'; // 关键：让 findSemanticPlayButton 跳过它，避免被当成播放键重复注入/劫持
-        styleButton(mpvBtn);
+        // 样式统一：直接继承原生播放按钮的类名（Semi 组件样式），只加一点左间距；
+        // 原生按钮若无类名（异常场景）再回退到内置的胶囊样式。
+        if (typeof playBtn.className === 'string' && playBtn.className.trim()) {
+            mpvBtn.className = playBtn.className;
+            mpvBtn.style.marginLeft = '12px';
+        } else {
+            styleButton(mpvBtn);
+        }
         mpvBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
